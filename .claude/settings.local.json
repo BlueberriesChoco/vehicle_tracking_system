@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Force -Path \"config/camera\", \"src/detection\", \"src/tracking\", \"src/trajectory\", \"src/behavior/features\", \"src/anomaly\", \"src/feature_extraction\", \"src/pipeline\", \"src/output\", \"src/visualization\", \"src/utils\", \"data/test_videos\", \"data/videos/camera_01\", \"data/outputs/vectors/cam01\", \"data/outputs/trajectories\", \"data/outputs/anomalies\", \"data/references\", \"models\", \"scripts\", \"tests\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"Directories created\")",
+      "Bash(mkdir -p \"d:/Code/vehicle_tracking_system/config/camera\" \"d:/Code/vehicle_tracking_system/src/detection\" \"d:/Code/vehicle_tracking_system/src/tracking\" \"d:/Code/vehicle_tracking_system/src/trajectory\" \"d:/Code/vehicle_tracking_system/src/behavior/features\" \"d:/Code/vehicle_tracking_system/src/anomaly\" \"d:/Code/vehicle_tracking_system/src/feature_extraction\" \"d:/Code/vehicle_tracking_system/src/pipeline\" \"d:/Code/vehicle_tracking_system/src/output\" \"d:/Code/vehicle_tracking_system/src/visualization\" \"d:/Code/vehicle_tracking_system/src/utils\" \"d:/Code/vehicle_tracking_system/data/test_videos\" \"d:/Code/vehicle_tracking_system/data/videos/camera_01\" \"d:/Code/vehicle_tracking_system/data/outputs/vectors/cam01\" \"d:/Code/vehicle_tracking_system/data/outputs/trajectories\" \"d:/Code/vehicle_tracking_system/data/outputs/anomalies\" \"d:/Code/vehicle_tracking_system/data/references\" \"d:/Code/vehicle_tracking_system/models\" \"d:/Code/vehicle_tracking_system/scripts\" \"d:/Code/vehicle_tracking_system/tests\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Code\\vehicle_tracking_system\\config"
+    ]
+  }
+}

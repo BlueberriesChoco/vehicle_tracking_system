@@ -1,0 +1,23 @@
+# Core
+ultralytics>=8.2.0
+opencv-python>=4.9.0
+numpy>=1.24.0
+scipy>=1.10.0
+pyyaml>=6.0
+
+# Tracking (ByteTrack implementation is self-contained in src/)
+# boxmot>=10.0.0  # Optional: if you prefer boxmot's ByteTrack
+
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Feature Extraction (Phase 2)
+# paddleocr>=2.7.0       # License plate OCR
+# torchreid>=0.2.1        # ReID embeddings
+
+# Visualization
+matplotlib>=3.7.0
+
+# Development
+pytest>=7.0.0

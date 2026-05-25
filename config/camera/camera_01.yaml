@@ -1,0 +1,30 @@
+camera_id: "cam01"
+camera_name: "综保区行政通道东入口"
+
+roi:
+  polygon: []                  # 通道ROI多边形 [[x1,y1], [x2,y2], ...] — 通过标定工具生成
+
+entry_line:
+  p1: [0, 0]                   # 通道入口线端点1
+  p2: [0, 0]                   # 通道入口线端点2
+
+exit_line:
+  p1: [0, 0]                   # 通道出口线端点1
+  p2: [0, 0]                   # 通道出口线端点2
+
+calibration:
+  ref_point_1: [0, 0]          # 参照物端点1（像素坐标）
+  ref_point_2: [0, 0]          # 参照物端点2（像素坐标）
+  ref_length_m: 6.0            # 参照物实际长度（米）
+  px_per_meter: 0.0            # 像素/米比例（自动计算）
+
+night_hours:
+  start: "22:00"
+  end: "06:00"
+
+behavior_thresholds:
+  speed_max_kmh: 40.0          # 最高合理速度
+  dwell_max_sec: 120.0         # 最大合理停留秒数
+  deviation_max_m: 3.0         # 最大路径偏离(米)
+  frequency_high_24h: 20       # 24h内超过此次数视为高频
+  aggregation_radius_m: 5.0    # 聚集判定半径(米)

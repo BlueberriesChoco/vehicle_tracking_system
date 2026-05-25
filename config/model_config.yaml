@@ -1,0 +1,31 @@
+detector:
+  name: "yolov8s"
+  weights: "models/yolov8s.pt"
+  img_size: 640
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  classes: [2, 3, 5, 7]
+  device: 0
+
+# Phase 2: 车辆属性特征提取（需模型文件时设置 enabled: true）
+# color 和 classifier 可在无模型时用启发式方法工作
+
+color:
+  enabled: true                   # HSV 聚类不需要模型文件
+  method: "hsv_clustering"
+
+classifier:
+  enabled: true                   # 几何推断不需要模型文件
+  model_name: "mobilenet_v3_small"
+  weights: "models/vehicle_type_model.pth"    # 可选：有 CNN 模型时更准确
+
+plate:
+  enabled: false                  # 需要 PaddleOCR 或模型文件
+  detector_weights: "models/plate_detector.pt"
+  ocr_engine: "paddleocr"
+
+reid:
+  enabled: false                  # 需要 OSNet 模型权重文件
+  model_name: "osnet_x1_0"
+  weights: "models/reid_model.pth"
+  embedding_dim: 512

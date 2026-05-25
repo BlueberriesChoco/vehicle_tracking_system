@@ -1,0 +1,48 @@
+# 全局默认配置
+# 各摄像头的专属配置在 camera/ 子目录下，会覆盖此处的默认值
+
+pipeline:
+  device: 0                   # GPU 设备编号，-1 表示 CPU
+  frame_skip: 1               # 跳帧处理（1=不跳帧）
+  max_frames: 0               # 最大处理帧数（0=不限制，调试用）
+  output_video: false          # 是否输出标注后的视频
+
+detection:
+  model_path: "models/yolov8s.pt"
+  img_size: 640
+  conf_threshold: 0.35
+  iou_threshold: 0.45
+  classes: [2, 3, 5, 7]      # COCO: car=2, motorcycle=3, bus=5, truck=7
+  half: true                   # FP16 推理
+
+tracking:
+  track_buffer: 30             # 丢失后保留帧数
+  match_thresh: 0.8            # IoU 匹配阈值
+  frame_rate: 25               # 视频帧率（用于时间计算）
+  min_hits: 3                  # 最小连续检测次数才确认轨迹
+
+trajectory:
+  min_trajectory_length: 10    # 最小轨迹点数（低于此数丢弃）
+  smoothing_window: 5          # 轨迹平滑窗口大小
+  enter_min_frames: 5          # 进入判定：至少在入口区域停留帧数
+
+behavior:
+  # 速度特征
+  speed:
+    dwell_threshold_ms: 0.5    # 判定为"停留"的速度阈值 (m/s)
+    dwell_min_duration_sec: 3.0 # 最小停留判定时长 (s)
+  # 夜间定义
+  night:
+    start_hour: 22
+    end_hour: 6
+
+output:
+  format: "csv"                # csv / parquet
+  save_trajectory_plot: true   # 是否保存轨迹图
+  save_anomaly_only: false     # 仅输出异常车辆
+
+visualization:
+  draw_trajectory: true
+  trajectory_tail: 50          # 轨迹尾迹长度（帧数）
+  box_thickness: 2
+  font_scale: 0.5

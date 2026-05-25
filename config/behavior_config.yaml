@@ -1,0 +1,45 @@
+# 行为向量特征配置
+# 控制哪些特征参与计算以及各自参数
+
+features:
+  speed:
+    enabled: true
+    dwell_threshold_ms: 0.5
+    dwell_min_duration_sec: 3.0
+
+  dwell:
+    enabled: true
+
+  path:
+    enabled: true
+
+  temporal:
+    enabled: true
+    night_start_hour: 22
+    night_end_hour: 6
+
+  frequency:
+    enabled: true
+    window_hours: 24
+
+  aggregation:
+    enabled: true
+    radius_m: 5.0              # 聚集判定半径
+
+vector_dimensions:
+  - "avg_speed_ms"
+  - "max_speed_ms"
+  - "speed_variance"
+  - "max_dwell_sec"
+  - "stop_count"
+  - "dwell_ratio"
+  - "path_deviation"
+  - "path_smoothness"
+  - "is_night"
+  - "night_ratio"
+  - "freq_index"
+  - "aggregation_index"
+
+normalization:
+  method: "zscore"             # zscore / minmax / none
+  baseline_file: "data/references/baseline_cam01.npy"
