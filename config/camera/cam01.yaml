@@ -1,12 +1,12 @@
 calibration:
-  px_per_meter: 0.0
-  ref_length_m: 6.0
+  px_per_meter: 50.0
+  ref_length_m: 3.0
   ref_point_1:
-  - 0
-  - 0
+  - 847
+  - 190
   ref_point_2:
-  - 0
-  - 0
+  - 1005
+  - 186
 camera_id: cam01
 camera_name: Camera cam01
 entry_line:

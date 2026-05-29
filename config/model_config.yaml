@@ -20,8 +20,8 @@ classifier:
   weights: "models/vehicle_type_model.pth"    # 可选：有 CNN 模型时更准确
 
 plate:
-  enabled: false                  # 需要 PaddleOCR 或模型文件
-  detector_weights: "models/plate_detector.pt"
+  enabled: true                   # PaddleOCR + 形态学检测
+  detector_weights: ""
   ocr_engine: "paddleocr"
 
 reid:

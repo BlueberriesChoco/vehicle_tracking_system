@@ -98,18 +98,20 @@ class FramePipeline:
             if not tracklet.bboxes:
                 continue
 
+            x1, y1, x2, y2 = tracklet.bboxes[-1]
+            h, w = frame.shape[:2]
+            x1_c = max(0, int(x1))
+            y1_c = max(0, int(y1))
+            x2_c = min(w, int(x2))
+            y2_c = min(h, int(y2))
+            if not (x2_c > x1_c and y2_c > y1_c):
+                continue
+
             latest_conf = tracklet.confidences[-1] if tracklet.confidences else 0
-            if latest_conf > tracklet.best_confidence:
+            if latest_conf >= tracklet.best_confidence:
                 tracklet.best_confidence = latest_conf
-                x1, y1, x2, y2 = tracklet.bboxes[-1]
-                h, w = frame.shape[:2]
-                x1_c = max(0, int(x1))
-                y1_c = max(0, int(y1))
-                x2_c = min(w, int(x2))
-                y2_c = min(h, int(y2))
-                if x2_c > x1_c and y2_c > y1_c:
-                    tracklet.best_crop = frame[y1_c:y2_c, x1_c:x2_c].copy()
-                    tracklet.best_crop_bbox = [x1_c, y1_c, x2_c, y2_c]
+                tracklet.best_crop = frame[y1_c:y2_c, x1_c:x2_c].copy()
+                tracklet.best_crop_bbox = [x1_c, y1_c, x2_c, y2_c]
 
     def finalize(self) -> List[dict]:
         """处理结束后，对未退出但已进入的轨迹也构建向量。"""

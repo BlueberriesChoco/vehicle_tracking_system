@@ -123,8 +123,8 @@ class TrajectoryExtractor:
 
         trajectory_length_m = self.scene.pixel_to_world(trajectory_length_px)
 
-        enter_time = None
-        exit_time = None
+        enter_time = tracklet.first_seen_time
+        exit_time = tracklet.last_seen_time
         if tracklet.enter_frame is not None and tracklet.enter_frame < len(tracklet.timestamps):
             enter_time = tracklet.timestamps[tracklet.enter_frame]
         if tracklet.exit_frame is not None and tracklet.exit_frame < len(tracklet.timestamps):

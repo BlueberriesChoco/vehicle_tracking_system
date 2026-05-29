@@ -22,7 +22,7 @@ class PlateDetector:
 
     def __init__(self, model_path: Optional[str] = None):
         self.model = None
-        self.use_yolo = model_path is not None
+        self.use_yolo = bool(model_path)
 
         if self.use_yolo:
             self._load_yolo(model_path)
