@@ -1,0 +1,39 @@
+calibration:
+  px_per_meter: 0.0
+  ref_length_m: 6.0
+  ref_point_1:
+  - 0
+  - 0
+  ref_point_2:
+  - 0
+  - 0
+camera_id: cam01
+camera_name: Camera cam01
+entry_line:
+  p1:
+  - 847
+  - 190
+  p2:
+  - 1005
+  - 186
+exit_line:
+  p1:
+  - 1023
+  - 1011
+  p2:
+  - 1694
+  - 982
+roi:
+  polygon:
+  - - 847
+    - 191
+  - - 1024
+    - 1025
+  - - 1699
+    - 1028
+  - - 1279
+    - 419
+  - - 1013
+    - 215
+  - - 979
+    - 177
