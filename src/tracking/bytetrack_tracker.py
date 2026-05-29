@@ -65,9 +65,10 @@ class ByteTrackTracker:
         # Step 2: 使用卡尔曼预测当前帧位置
         predictions = self._predict_all()
 
-        # Step 3: 高分检测与已确认轨迹做第一次关联（IoU）
+        # Step 3: 已确认轨迹与高分检测做第一次关联（IoU）
+        all_active_ids = [tid for tid, t in self.tracklets.items() if t.is_active]
         matched, unmatched_tracks, unmatched_high = self._match_iou(
-            self._get_confirmed_track_ids(), high_dets, predictions
+            all_active_ids, high_dets, predictions
         )
 
         # Step 4: 低分检测与未匹配轨迹做第二次关联

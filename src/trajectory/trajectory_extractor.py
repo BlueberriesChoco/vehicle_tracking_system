@@ -36,32 +36,50 @@ class TrajectoryExtractor:
     ) -> List[Tracklet]:
         """逐帧处理：检测进出事件。
 
+        优先使用标定的进出线判定穿越；
+        若进出线未配置（退化线段），则自动判定：
+          - enter: 轨迹点数达到 enter_min_frames 视为进入
+          - exit:  轨迹变为非活跃（lost/finished）视为离开
+
         Returns:
             当前帧刚完成 exit 的轨迹列表
         """
         newly_exited: List[Tracklet] = []
+        entry_configured = self.scene.has_valid_entry_line()
+        exit_configured = self.scene.has_valid_exit_line()
 
         for tid, tracklet in tracklets.items():
-            if not tracklet.is_active:
-                continue
-            if tracklet.trajectory_length < 2:
-                continue
+            # ---- 进入判定 ----
+            if tracklet.is_active and not tracklet.has_entered:
+                entered = False
+                if entry_configured and tracklet.trajectory_length >= 2:
+                    p_prev = tracklet.centers[-2]
+                    p_curr = tracklet.centers[-1]
+                    if self.scene.check_line_crossing(p_prev, p_curr, "entry"):
+                        entered = True
+                elif tracklet.trajectory_length >= self.enter_min_frames:
+                    entered = True
 
-            # 判断是否穿越入口线
-            if not tracklet.has_entered:
-                p_prev = tracklet.centers[-2]
-                p_curr = tracklet.centers[-1]
-                if self.scene.check_line_crossing(p_prev, p_curr, "entry"):
+                if entered:
                     tracklet.mark_entered(frame_idx)
                     self._entered_tracks[tid] = tracklet
 
-            # 判断是否穿越出口线
+            # ---- 离开判定 ----
             if tracklet.has_entered and not tracklet.has_exited:
-                p_prev = tracklet.centers[-2]
-                p_curr = tracklet.centers[-1]
-                if self.scene.check_line_crossing(p_prev, p_curr, "exit"):
+                exited = False
+                if exit_configured and tracklet.trajectory_length >= 2:
+                    p_prev = tracklet.centers[-2]
+                    p_curr = tracklet.centers[-1]
+                    if self.scene.check_line_crossing(p_prev, p_curr, "exit"):
+                        exited = True
+                elif not tracklet.is_active:
+                    exited = True
+
+                if exited:
                     tracklet.mark_exited(frame_idx)
                     newly_exited.append(tracklet)
+                    if tid in self._entered_tracks:
+                        del self._entered_tracks[tid]
 
         return newly_exited
 

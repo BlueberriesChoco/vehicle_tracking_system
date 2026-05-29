@@ -71,15 +71,16 @@ class FramePipeline:
         # Step 3.5: 保存每辆车的最佳裁剪（用于 Phase 2 特征提取）
         self._save_best_crops(frame)
 
-        # Step 4: 轨迹进出判定
-        active_tracklets = self.tracker.get_active_tracklets()
+        # Step 4: 轨迹进出判定（传所有 tracklet，不活跃的用于 auto-exit 检测）
+        all_tracklets = self.tracker.get_all_tracklets()
         newly_exited = self.trajectory_extractor.process_frame(
-            {t.track_id: t for t in active_tracklets},
+            {t.track_id: t for t in all_tracklets},
             self._frame_idx,
         )
 
         # Step 5: 对刚完成穿越的轨迹构建行为向量
         new_vectors = []
+        active_tracklets = self.tracker.get_active_tracklets()
         all_positions = self._get_active_positions(active_tracklets)
 
         for tracklet in newly_exited:

@@ -54,6 +54,14 @@ class SceneGeometry:
             return True
         return False
 
+    def has_valid_entry_line(self) -> bool:
+        """入口线是否有效（两端点不同）。"""
+        return not np.array_equal(self.entry_p1, self.entry_p2)
+
+    def has_valid_exit_line(self) -> bool:
+        """出口线是否有效（两端点不同）。"""
+        return not np.array_equal(self.exit_p1, self.exit_p2)
+
     def pixel_to_world(self, px_distance: float) -> float:
         """像素距离 → 世界距离（米）。"""
         return px_distance / self.px_per_meter if self.px_per_meter > 0 else 0.0
