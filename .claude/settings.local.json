@@ -10,7 +10,9 @@
       "Bash(pip install *)",
       "Bash(ls -la \"F:/test_videos/A区卡口非机动车车道入口/\")",
       "Read(//f/test_videos/A区卡口非机动车车道入口/**)",
-      "Bash(pip list *)"
+      "Bash(pip list *)",
+      "Bash(.venv/python.exe -c ' *)",
+      "Bash(\".venv/python.exe\" scripts/run_pipeline.py --video \"F:/test_videos/zone_a_nmv_entrance/zone_a_nmv_20260422080348_20260422092334.mp4\" --camera cam01 --output data/outputs --max-frames 5000)"
     ],
     "additionalDirectories": [
       "d:\\Code\\vehicle_tracking_system\\config"
