@@ -40,10 +40,8 @@ class PlateOCR:
         try:
             from paddleocr import PaddleOCR
             self.ocr = PaddleOCR(
-                use_angle_cls=True,
                 lang=self.lang,
-                use_gpu=False,
-                show_log=False,
+                use_textline_orientation=True,
             )
         except ImportError:
             self.ocr = None
@@ -53,7 +51,9 @@ class PlateOCR:
     def _init_easyocr(self):
         try:
             import easyocr
-            self.ocr = easyocr.Reader([self.lang], gpu=False)
+            import torch
+            use_gpu = torch.cuda.is_available()
+            self.ocr = easyocr.Reader([self.lang], gpu=use_gpu)
         except ImportError:
             self.ocr = None
         except Exception:

@@ -20,9 +20,9 @@ classifier:
   weights: "models/vehicle_type_model.pth"    # 可选：有 CNN 模型时更准确
 
 plate:
-  enabled: true                   # PaddleOCR + 形态学检测
+  enabled: true                   # EasyOCR + 形态学检测
   detector_weights: ""
-  ocr_engine: "paddleocr"
+  ocr_engine: "easyocr"
 
 reid:
   enabled: false                  # 需要 OSNet 模型权重文件
