@@ -66,7 +66,12 @@ class ByteTrackTracker:
         predictions = self._predict_all()
 
         # Step 3: 已确认轨迹与高分检测做第一次关联（IoU）
-        all_active_ids = [tid for tid, t in self.tracklets.items() if t.is_active]
+        # Keep recently lost tracks eligible for matching. A single missed
+        # detection must not permanently split one vehicle into two IDs.
+        all_active_ids = [
+            tid for tid, t in self.tracklets.items()
+            if t.is_active or (t.is_lost and t.lost_frames <= self.track_buffer)
+        ]
         matched, unmatched_tracks, unmatched_high = self._match_iou(
             all_active_ids, high_dets, predictions
         )
@@ -298,3 +303,11 @@ class ByteTrackTracker:
 
     def get_tracklet(self, track_id: int) -> Optional[Tracklet]:
         return self.tracklets.get(track_id)
+
+    def reset(self):
+        """Clear per-video tracking state while keeping configuration."""
+        self.tracklets.clear()
+        self._kalman_states.clear()
+        self._next_id = 0
+        self._frame_idx = 0
+        self._start_time = None

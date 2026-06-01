@@ -13,6 +13,7 @@
 
 import os
 import csv
+import json
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -68,6 +69,8 @@ class DailyAggregator:
         for fname in hourly_files:
             filepath = os.path.join(vector_dir, fname)
             vectors = self._load_csv(filepath)
+            for vec in vectors:
+                vec["_segment_id"] = fname
             all_vectors.extend(vectors)
 
         if len(all_vectors) <= 1:
@@ -79,7 +82,7 @@ class DailyAggregator:
 
         # 3. 构建跨段匹配图
         # 策略：对相邻向量做时空约束 + ReID 相似度匹配
-        global_id_map: Dict[int, int] = {}  # local track_id → global_vehicle_id
+        global_id_map: Dict[Tuple[str, str], int] = {}
         next_global_id = 0
         global_groups: Dict[int, List[dict]] = defaultdict(list)
 
@@ -111,12 +114,12 @@ class DailyAggregator:
 
             # 分配 global_id 给当前段尚未分配的向量
             for vec in hour_vectors:
-                tid = vec.get("track_id", -1)
-                if tid not in global_id_map:
-                    global_id_map[tid] = next_global_id
+                track_key = self._get_track_key(vec)
+                if track_key not in global_id_map:
+                    global_id_map[track_key] = next_global_id
                     next_global_id += 1
 
-                gid = global_id_map[tid]
+                gid = global_id_map[track_key]
                 global_groups[gid].append(vec)
 
             # 当前段末尾作为下一次匹配的前一段
@@ -139,7 +142,7 @@ class DailyAggregator:
         self,
         prev_vectors: List[dict],
         curr_vectors: List[dict],
-        global_id_map: Dict[int, int],
+        global_id_map: Dict[Tuple[str, str], int],
         reid_extractor=None,
     ):
         """在前后两段的边界车辆之间做匹配。
@@ -149,6 +152,7 @@ class DailyAggregator:
         2. 空间距离 < spatio_radius_m（若有轨迹点）
         3. ReID 相似度 > similarity_threshold（若有 ReID 模型）
         """
+        matched_current_keys = set()
         for pv in prev_vectors:
             p_exit = self._parse_time(pv.get("exit_time", ""))
             if p_exit is None:
@@ -157,6 +161,9 @@ class DailyAggregator:
             p_endpoint = self._get_last_trajectory_point(pv)
 
             for cv in curr_vectors:
+                c_key = self._get_track_key(cv)
+                if c_key in matched_current_keys:
+                    continue
                 c_enter = self._parse_time(cv.get("enter_time", ""))
                 if c_enter is None:
                     continue
@@ -181,28 +188,34 @@ class DailyAggregator:
                     continue
 
                 # ReID 匹配（Phase 2：需要存储 embedding）
-                reid_ok = True
+                identity_match = False
+                p_plate = pv.get("plate_hash", "")
+                c_plate = cv.get("plate_hash", "")
+                if p_plate and c_plate and p_plate == c_plate:
+                    identity_match = True
                 if reid_extractor is not None:
-                    p_emb = np.array(pv.get("reid_embedding", []))
-                    c_emb = np.array(cv.get("reid_embedding", []))
+                    p_emb = self._parse_embedding(pv.get("reid_embedding", []))
+                    c_emb = self._parse_embedding(cv.get("reid_embedding", []))
                     if len(p_emb) > 0 and len(c_emb) > 0:
                         sim = reid_extractor.compute_similarity(p_emb, c_emb)
-                        if sim < self.similarity_threshold:
-                            reid_ok = False
+                        if sim >= self.similarity_threshold:
+                            identity_match = True
 
-                if not reid_ok:
+                if not identity_match:
                     continue
 
                 # 匹配成功：共享同一 global_id
-                p_tid = pv.get("track_id", -1)
-                c_tid = cv.get("track_id", -1)
-                if p_tid in global_id_map:
-                    global_id_map[c_tid] = global_id_map[p_tid]
-                elif c_tid in global_id_map:
-                    global_id_map[p_tid] = global_id_map[c_tid]
+                p_key = self._get_track_key(pv)
+                c_key = self._get_track_key(cv)
+                if p_key in global_id_map:
+                    global_id_map[c_key] = global_id_map[p_key]
+                elif c_key in global_id_map:
+                    global_id_map[p_key] = global_id_map[c_key]
                 else:
                     # 新建共享 ID
                     pass  # 在后续统一分配时处理
+                matched_current_keys.add(c_key)
+                break
 
     def _merge_group(self, global_id: int, group: List[dict]) -> dict:
         """将同一车辆的多段轨迹合并为一条记录。"""
@@ -219,11 +232,14 @@ class DailyAggregator:
         last = group[-1]
 
         # 聚合统计量
-        total_duration = sum(v.get("duration_sec", 0) for v in group)
-        total_length = sum(v.get("trajectory_length_m", 0) for v in group)
-        avg_speeds = [v.get("avg_speed_ms", 0) for v in group if v.get("avg_speed_ms", 0) > 0]
-        max_dwells = [v.get("max_dwell_sec", 0) for v in group]
-        stop_counts = sum(v.get("stop_count", 0) for v in group)
+        total_duration = sum(self._as_float(v.get("duration_sec", 0)) for v in group)
+        total_length = sum(self._as_float(v.get("trajectory_length_m", 0)) for v in group)
+        avg_speeds = [
+            self._as_float(v.get("avg_speed_ms", 0))
+            for v in group if self._as_float(v.get("avg_speed_ms", 0)) > 0
+        ]
+        max_dwells = [self._as_float(v.get("max_dwell_sec", 0)) for v in group]
+        stop_counts = sum(self._as_int(v.get("stop_count", 0)) for v in group)
 
         merged = {
             "track_id": global_id,
@@ -231,29 +247,31 @@ class DailyAggregator:
             "camera_id": first.get("camera_id", ""),
             "vehicle_type": self._majority_vote(group, "vehicle_type"),
             "vehicle_color": self._majority_vote(group, "vehicle_color"),
+            "plate_number": first.get("plate_number", ""),
             "plate_hash": first.get("plate_hash", ""),
             "enter_time": first.get("enter_time", ""),
             "exit_time": last.get("exit_time", ""),
             "duration_sec": round(total_duration, 2),
             "trajectory_length_m": round(total_length, 2),
             "avg_speed_ms": round(np.mean(avg_speeds), 3) if avg_speeds else 0,
-            "max_speed_ms": max(v.get("max_speed_ms", 0) for v in group),
-            "speed_variance": round(np.mean([v.get("speed_variance", 0) for v in group]), 3),
+            "max_speed_ms": max(self._as_float(v.get("max_speed_ms", 0)) for v in group),
+            "speed_variance": round(np.mean([self._as_float(v.get("speed_variance", 0)) for v in group]), 3),
             "max_dwell_sec": max(max_dwells) if max_dwells else 0,
             "stop_count": stop_counts,
             "dwell_ratio": round(
-                sum(v.get("dwell_ratio", 0) * v.get("duration_sec", 0) for v in group) /
+                sum(self._as_float(v.get("dwell_ratio", 0)) * self._as_float(v.get("duration_sec", 0)) for v in group) /
                 total_duration if total_duration > 0 else 0, 4
             ),
-            "path_deviation": max(v.get("path_deviation", 0) for v in group),
-            "path_smoothness": round(np.mean([v.get("path_smoothness", 0) for v in group]), 4),
+            "path_deviation": max(self._as_float(v.get("path_deviation", 0)) for v in group),
+            "path_smoothness": round(np.mean([self._as_float(v.get("path_smoothness", 0)) for v in group]), 4),
             "is_night": first.get("is_night", 0),
             "night_ratio": first.get("night_ratio", 0),
             "freq_index": first.get("freq_index", 0),
             "freq_count_24h": first.get("freq_count_24h", 0),
-            "aggregation_index": max(v.get("aggregation_index", 0) for v in group),
-            "nearest_vehicle_m": min(v.get("nearest_vehicle_m", -1) for v in group),
+            "aggregation_index": max(self._as_float(v.get("aggregation_index", 0)) for v in group),
+            "nearest_vehicle_m": min(self._as_float(v.get("nearest_vehicle_m", -1)) for v in group),
             "trajectory_points": first.get("trajectory_points", ""),
+            "reid_embedding": first.get("reid_embedding", []),
             "segment_count": len(group),
             "anomaly_score": first.get("anomaly_score", 0),
             "is_anomaly": first.get("is_anomaly", 0),
@@ -302,33 +320,22 @@ class DailyAggregator:
         if not vectors:
             return []
 
-        # 找到最早/最晚进入时间
-        times = []
+        timed_vectors = []
         for v in vectors:
-            t = v.get("enter_time", "")
-            if t:
-                times.append(t)
-
-        if not times:
+            parsed = DailyAggregator._parse_time(v.get("enter_time", ""))
+            if parsed is not None:
+                timed_vectors.append((v, parsed))
+        if not timed_vectors:
             return []
 
-        sorted_vectors = sorted(
-            [(v, t) for v, t in zip(vectors, times) if t],
-            key=lambda x: x[1],
-        )
-
+        sorted_vectors = sorted(timed_vectors, key=lambda item: item[1])
+        window = timedelta(minutes=window_min)
         if head:
             ref_time = sorted_vectors[0][1]
-            return [
-                v for v, t in sorted_vectors
-                if t <= ref_time[:19]  # 同一分钟
-            ][:10]
-        else:
-            ref_time = sorted_vectors[-1][1]
-            return [
-                v for v, t in sorted_vectors
-                if t >= ref_time[:19]
-            ][-10:]
+            return [v for v, timestamp in sorted_vectors if timestamp <= ref_time + window]
+
+        ref_time = sorted_vectors[-1][1]
+        return [v for v, timestamp in sorted_vectors if timestamp >= ref_time - window]
 
     @staticmethod
     def _get_last_trajectory_point(vec: dict) -> Optional[Tuple[float, float]]:
@@ -366,6 +373,33 @@ class DailyAggregator:
             return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def _get_track_key(vec: dict) -> Tuple[str, str]:
+        return str(vec.get("_segment_id", "")), str(vec.get("track_id", "-1"))
+
+    @staticmethod
+    def _parse_embedding(value) -> np.ndarray:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except (TypeError, ValueError):
+                return np.array([])
+        return np.array(value if value is not None else [], dtype=np.float64)
+
+    @staticmethod
+    def _as_float(value) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _as_int(value) -> int:
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return 0
 
     @staticmethod
     def _majority_vote(group: List[dict], key: str) -> str:

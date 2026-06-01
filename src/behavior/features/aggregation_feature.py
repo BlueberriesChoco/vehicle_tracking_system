@@ -1,15 +1,12 @@
-from typing import List, Tuple, Dict
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 
 from ...trajectory.scene_geometry import SceneGeometry
 
 
 class AggregationFeatureExtractor:
-    """聚集行为特征提取器。
-
-    分析车辆在通道内行驶时与其他车辆的时空邻近度，
-    计算聚集行为指数（车辆成群结队通过的程度）。
-    """
+    """Extract proximity features from vehicles visible at the same time."""
 
     def __init__(self, scene_geometry: SceneGeometry, aggregation_radius_m: float = 5.0):
         self.scene = scene_geometry
@@ -20,54 +17,64 @@ class AggregationFeatureExtractor:
         self,
         centers: List[Tuple[float, float]],
         all_active_positions: Dict[int, Tuple[float, float]],
+        current_track_id: int = None,
+        frame_indices: Optional[List[int]] = None,
+        position_histories: Optional[Dict[int, Dict[int, Tuple[float, float]]]] = None,
     ) -> dict:
-        """计算聚集行为指数。
+        """Calculate proximity using matching frame indices when available."""
+        snapshot_positions = {
+            track_id: position
+            for track_id, position in all_active_positions.items()
+            if track_id != current_track_id
+        }
+        if not centers:
+            return self._empty_result()
 
-        Args:
-            centers: 当前车辆的轨迹中心点
-            all_active_positions: 同时段其他车辆的 {track_id: (cx, cy)}
-
-        Returns:
-            dict with aggregation_index, nearest_vehicle_m, max_concurrent_vehicles
-        """
-        if not centers or len(all_active_positions) <= 1:
-            return {
-                "aggregation_index": 0.0,
-                "nearest_vehicle_m": -1.0,
-                "max_concurrent_vehicles": max(1, len(all_active_positions)),
-            }
-
-        # 对每帧计算当前车辆与其他车辆的最小距离
         aggregation_frames = 0
-        valid_frames = 0
+        all_distances = []
+        max_concurrent = 1
 
-        for cx, cy in centers:
-            valid_frames += 1
-            min_dist_px = float("inf")
-            for other_id, (ox, oy) in all_active_positions.items():
-                dist_px = np.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
-                if dist_px < min_dist_px:
-                    min_dist_px = dist_px
+        for index, (cx, cy) in enumerate(centers):
+            concurrent_positions = snapshot_positions
+            if (
+                frame_indices is not None
+                and position_histories is not None
+                and index < len(frame_indices)
+            ):
+                frame_idx = frame_indices[index]
+                concurrent_positions = {
+                    track_id: history[frame_idx]
+                    for track_id, history in position_histories.items()
+                    if track_id != current_track_id and frame_idx in history
+                }
 
+            max_concurrent = max(max_concurrent, len(concurrent_positions) + 1)
+            distances = [
+                np.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
+                for ox, oy in concurrent_positions.values()
+            ]
+            if not distances:
+                continue
+
+            min_dist_px = min(distances)
+            all_distances.append(min_dist_px)
             if min_dist_px < self.aggregation_radius_px:
                 aggregation_frames += 1
 
-        aggregation_index = aggregation_frames / valid_frames if valid_frames > 0 else 0.0
-
-        # 全局最近距离
-        all_distances = []
-        for cx, cy in centers:
-            for other_id, (ox, oy) in all_active_positions.items():
-                dist_px = np.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
-                all_distances.append(dist_px)
-
         nearest_m = -1.0
         if all_distances:
-            nearest_px = min(all_distances)
-            nearest_m = self.scene.pixel_to_world(nearest_px)
+            nearest_m = self.scene.pixel_to_world(min(all_distances))
 
         return {
-            "aggregation_index": round(aggregation_index, 4),
+            "aggregation_index": round(aggregation_frames / len(centers), 4),
             "nearest_vehicle_m": round(nearest_m, 2),
-            "max_concurrent_vehicles": max(1, len(all_active_positions)),
+            "max_concurrent_vehicles": max_concurrent,
+        }
+
+    @staticmethod
+    def _empty_result() -> dict:
+        return {
+            "aggregation_index": 0.0,
+            "nearest_vehicle_m": -1.0,
+            "max_concurrent_vehicles": 1,
         }

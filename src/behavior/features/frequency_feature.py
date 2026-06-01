@@ -51,3 +51,8 @@ class FrequencyFeatureExtractor:
 
     def get_count(self, vehicle_key: str) -> int:
         return self._frequency_map.get(vehicle_key, 0)
+
+    def reset(self):
+        """Clear counters when starting an independent video segment."""
+        self._frequency_map.clear()
+        self._total_vehicles = 0

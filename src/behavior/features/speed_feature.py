@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import numpy as np
 
 from ...trajectory.scene_geometry import SceneGeometry
@@ -25,6 +25,7 @@ class SpeedFeatureExtractor:
         self,
         xs_smooth: np.ndarray,
         ys_smooth: np.ndarray,
+        timestamps: Optional[List] = None,
     ) -> np.ndarray:
         """计算瞬时速度序列 (m/s)。"""
         if len(xs_smooth) < 2:
@@ -37,7 +38,12 @@ class SpeedFeatureExtractor:
             dist_px = np.sqrt(dx * dx + dy * dy)
             dist_m = self.scene.pixel_to_world(dist_px)
             # 速度 = 距离(米) / 时间(秒), 时间 = 1/frame_rate
-            speed_ms = dist_m * self.frame_rate
+            delta_sec = 1.0 / self.frame_rate
+            if timestamps is not None and len(timestamps) == len(xs_smooth):
+                measured_delta = (timestamps[i] - timestamps[i - 1]).total_seconds()
+                if measured_delta > 0:
+                    delta_sec = measured_delta
+            speed_ms = dist_m / delta_sec
             speeds.append(speed_ms)
 
         return np.array(speeds)
@@ -46,13 +52,14 @@ class SpeedFeatureExtractor:
         self,
         xs_smooth: np.ndarray,
         ys_smooth: np.ndarray,
+        timestamps: Optional[List] = None,
     ) -> dict:
         """提取速度相关特征。
 
         Returns:
             dict with avg_speed_ms, max_speed_ms, speed_variance
         """
-        speeds = self.compute_instant_speeds(xs_smooth, ys_smooth)
+        speeds = self.compute_instant_speeds(xs_smooth, ys_smooth, timestamps)
 
         if len(speeds) == 0:
             return {

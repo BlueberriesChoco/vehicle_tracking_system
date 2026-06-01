@@ -2,7 +2,7 @@ import os
 import cv2
 import yaml
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from ..detection.detector import VehicleDetector
@@ -214,6 +214,7 @@ class BatchProcessor:
             输出的行为向量 CSV 文件路径
         """
         self.logger.info(f"Processing video: {video_path}")
+        self.pipeline.reset()
 
         # 解析输出文件路径
         video_name = Path(video_path).stem
@@ -230,6 +231,8 @@ class BatchProcessor:
         # 打开视频
         cap = FrameReader.open(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        source_fps = cap.get(cv2.CAP_PROP_FPS) or self.frame_rate
+        video_start_time = self._parse_video_start_time(video_name) or datetime.now()
         self.logger.info(f"Total frames: {total_frames}")
 
         # 视频写入器
@@ -258,7 +261,10 @@ class BatchProcessor:
                 break
 
             # 处理帧
-            annotated_frame, new_vectors = self.pipeline.process_frame(frame)
+            timestamp = video_start_time + timedelta(
+                seconds=(frame_count - 1) / source_fps
+            )
+            annotated_frame, new_vectors = self.pipeline.process_frame(frame, timestamp)
 
             # 写标注视频
             if video_writer is not None:
@@ -361,3 +367,17 @@ class BatchProcessor:
                 break
 
         return date_str, hour_str
+
+    @staticmethod
+    def _parse_video_start_time(video_name: str) -> Optional[datetime]:
+        """Parse the recording start timestamp from an hourly video filename."""
+        parts = video_name.split("_")
+        for index, part in enumerate(parts):
+            if len(part) == 8 and part.isdigit() and index + 1 < len(parts):
+                time_part = parts[index + 1]
+                if len(time_part) >= 6 and time_part[:6].isdigit():
+                    try:
+                        return datetime.strptime(part + time_part[:6], "%Y%m%d%H%M%S")
+                    except ValueError:
+                        return None
+        return None

@@ -125,10 +125,10 @@ class TrajectoryExtractor:
 
         enter_time = tracklet.first_seen_time
         exit_time = tracklet.last_seen_time
-        if tracklet.enter_frame is not None and tracklet.enter_frame < len(tracklet.timestamps):
-            enter_time = tracklet.timestamps[tracklet.enter_frame]
-        if tracklet.exit_frame is not None and tracklet.exit_frame < len(tracklet.timestamps):
-            exit_time = tracklet.timestamps[tracklet.exit_frame]
+        if tracklet.enter_frame in tracklet.frame_indices:
+            enter_time = tracklet.timestamps[tracklet.frame_indices.index(tracklet.enter_frame)]
+        if tracklet.exit_frame in tracklet.frame_indices:
+            exit_time = tracklet.timestamps[tracklet.frame_indices.index(tracklet.exit_frame)]
 
         return {
             "track_id": tracklet.track_id,
@@ -143,3 +143,7 @@ class TrajectoryExtractor:
             "xs_smooth": xs_smooth.tolist(),
             "ys_smooth": ys_smooth.tolist(),
         }
+
+    def reset(self):
+        """Clear per-video trajectory lifecycle state."""
+        self._entered_tracks.clear()

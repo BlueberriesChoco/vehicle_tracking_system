@@ -73,6 +73,7 @@ class FramePipeline:
 
         # Step 4: 轨迹进出判定（传所有 tracklet，不活跃的用于 auto-exit 检测）
         all_tracklets = self.tracker.get_all_tracklets()
+        position_histories = self._get_position_histories(all_tracklets)
         newly_exited = self.trajectory_extractor.process_frame(
             {t.track_id: t for t in all_tracklets},
             self._frame_idx,
@@ -84,7 +85,7 @@ class FramePipeline:
         all_positions = self._get_active_positions(active_tracklets)
 
         for tracklet in newly_exited:
-            vec = self.vectorizer.vectorize(tracklet, all_positions)
+            vec = self.vectorizer.vectorize(tracklet, all_positions, position_histories)
             new_vectors.append(vec)
 
         self._completed_vectors.extend(new_vectors)
@@ -131,6 +132,7 @@ class FramePipeline:
         remaining = []
         all_tracklets = self.tracker.get_all_tracklets()
         all_positions = self._get_all_last_positions(all_tracklets)
+        position_histories = self._get_position_histories(all_tracklets)
 
         for tracklet in all_tracklets:
             if tracklet.is_complete or tracklet.has_entered:
@@ -138,7 +140,7 @@ class FramePipeline:
                     v["track_id"] == tracklet.track_id for v in self._completed_vectors
                 )
                 if not already_done and tracklet.trajectory_length >= self.trajectory_extractor.min_trajectory_length:
-                    vec = self.vectorizer.vectorize(tracklet, all_positions)
+                    vec = self.vectorizer.vectorize(tracklet, all_positions, position_histories)
                     remaining.append(vec)
 
         self._completed_vectors.extend(remaining)
@@ -151,6 +153,15 @@ class FramePipeline:
     @property
     def completed_vectors(self) -> List[dict]:
         return self._completed_vectors
+
+    def reset(self):
+        """Reset independent video state without reloading inference models."""
+        self.tracker.reset()
+        self.trajectory_extractor.reset()
+        self.vectorizer.reset()
+        self._frame_idx = 0
+        self._start_time = None
+        self._completed_vectors.clear()
 
     @staticmethod
     def _get_active_positions(active_tracklets: List[Tracklet]) -> Dict[int, Tuple[float, float]]:
@@ -167,3 +178,12 @@ class FramePipeline:
             if t.centers:
                 positions[t.track_id] = t.centers[-1]
         return positions
+
+    @staticmethod
+    def _get_position_histories(
+        all_tracklets: List[Tracklet],
+    ) -> Dict[int, Dict[int, Tuple[float, float]]]:
+        return {
+            tracklet.track_id: dict(zip(tracklet.frame_indices, tracklet.centers))
+            for tracklet in all_tracklets
+        }

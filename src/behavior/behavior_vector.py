@@ -93,6 +93,7 @@ class BehaviorVectorizer:
         self,
         tracklet: Tracklet,
         all_active_positions: Optional[Dict[int, Tuple[float, float]]] = None,
+        position_histories: Optional[Dict[int, Dict[int, Tuple[float, float]]]] = None,
     ) -> dict:
         """对一条轨迹构建完整行为向量。
 
@@ -111,7 +112,9 @@ class BehaviorVectorizer:
         centers_smooth = [(float(xs_smooth[i]), float(ys_smooth[i])) for i in range(len(xs_smooth))]
 
         # 2. 速度特征
-        speed_features = self.speed_extractor.extract(xs_smooth, ys_smooth)
+        speed_features = self.speed_extractor.extract(
+            xs_smooth, ys_smooth, tracklet.timestamps
+        )
 
         # 3. 停留特征
         dwell_features = self.dwell_extractor.extract(speed_features["instant_speeds"])
@@ -125,14 +128,13 @@ class BehaviorVectorizer:
         temporal_features = self.temporal_extractor.extract(enter_time, exit_time)
 
         # 6. 高频通行指数
-        vehicle_key = tracklet.plate_hash or str(tracklet.track_id)
-        self.frequency_extractor.register_vehicle(vehicle_key)
-        freq_index = self.frequency_extractor.compute_freq_index(vehicle_key)
-        freq_count = self.frequency_extractor.get_count(vehicle_key)
-
         # 7. 聚集行为指数
         aggregation_features = self.aggregation_extractor.extract(
-            centers_smooth, all_active_positions
+            centers_smooth,
+            all_active_positions,
+            tracklet.track_id,
+            tracklet.frame_indices,
+            position_histories,
         )
 
         # 8. 轨迹摘要
@@ -184,6 +186,12 @@ class BehaviorVectorizer:
                     plate_hash = self.plate_ocr.hash_plate(plate_number)
                     tracklet.plate_number = plate_number
                     tracklet.plate_hash = plate_hash
+
+        # Register frequency after OCR so newly extracted plates are used.
+        vehicle_key = tracklet.plate_hash or str(tracklet.track_id)
+        self.frequency_extractor.register_vehicle(vehicle_key)
+        freq_index = self.frequency_extractor.compute_freq_index(vehicle_key)
+        freq_count = self.frequency_extractor.get_count(vehicle_key)
 
         # 9. 组合完整向量
         vector = {
@@ -257,6 +265,10 @@ class BehaviorVectorizer:
 
     def load_normalizer(self, filepath: str):
         self.normalizer.load(filepath)
+
+    def reset(self):
+        """Clear per-video feature state while keeping extractor models loaded."""
+        self.frequency_extractor.reset()
 
     @staticmethod
     def _serialize_trajectory(centers: List[Tuple[float, float]], max_points: int = 200) -> str:

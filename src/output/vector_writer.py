@@ -12,7 +12,8 @@ class VectorWriter:
     """
 
     CSV_COLUMNS = [
-        "track_id", "camera_id", "vehicle_type", "vehicle_color",
+        "track_id", "global_vehicle_id", "segment_count",
+        "camera_id", "vehicle_type", "vehicle_color",
         "plate_number", "plate_hash",
         "enter_time", "exit_time", "duration_sec", "trajectory_length_m",
         "avg_speed_ms", "max_speed_ms", "speed_variance",
@@ -22,6 +23,7 @@ class VectorWriter:
         "freq_index", "freq_count_24h",
         "aggregation_index", "nearest_vehicle_m",
         "trajectory_points",
+        "reid_embedding",
         "anomaly_score", "is_anomaly", "alert_reason",
     ]
 
