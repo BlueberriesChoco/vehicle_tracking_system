@@ -42,6 +42,9 @@ class Tracklet:
     avg_bbox_area: float = 0.0
     best_crop: object = None              # 最佳检测帧裁剪（用于 Phase 2 特征提取）
     best_crop_bbox: List[int] = field(default_factory=list)
+    largest_crop: object = None           # 最大尺寸裁剪（车辆最近时，用于车牌OCR）
+    largest_crop_bbox: List[int] = field(default_factory=list)
+    largest_bbox_area: float = 0.0        # 记录最大 bbox 面积，用于比较
     plate_number: str = ""                # 车牌号
     plate_hash: str = ""                  # 车牌哈希
     reid_embedding: object = None         # ReID 特征向量 (np.ndarray)

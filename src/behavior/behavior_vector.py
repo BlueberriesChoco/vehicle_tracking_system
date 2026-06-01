@@ -144,36 +144,46 @@ class BehaviorVectorizer:
         plate_number = ""
         plate_hash = ""
 
+        # ▸▸▸ Phase 2: 车辆属性特征提取 ◂◂◂
+        ocr_crop = None  # 用于车牌 OCR 的裁剪图
+
         if tracklet.best_crop is not None:
-            # 颜色识别
+            # 颜色识别（用最高置信度裁剪）
             if self.color_recognizer is not None:
                 vehicle_color = self.color_recognizer.recognize(tracklet.best_crop)
 
-            # 车型细分
+            # 车型细分（用最高置信度裁剪）
             if self.vehicle_classifier is not None:
                 bbox = tracklet.bboxes[-1] if tracklet.bboxes else tracklet.best_crop_bbox
                 vehicle_type = self.vehicle_classifier.classify(tracklet.best_crop, bbox)
-                # 用 YOLO 类别约束：若 YOLO 说是 truck，细分也是 truck
                 if tracklet.class_name in ("truck", "bus", "motorcycle"):
                     vehicle_type = self.vehicle_classifier.classify_from_yolo(
                         tracklet.class_name, bbox
                     )
 
-            # 车牌检测 + OCR
-            if self.plate_detector is not None:
-                plate_result = self.plate_detector.detect(tracklet.best_crop)
-                if plate_result is not None:
-                    plate_img, _ = plate_result
-                    if self.plate_ocr is not None and plate_img.size > 0:
-                        plate_number, _ = self.plate_ocr.recognize(plate_img)
-                        plate_hash = self.plate_ocr.hash_plate(plate_number)
-                        tracklet.plate_number = plate_number
-                        tracklet.plate_hash = plate_hash
-
             # ReID 特征提取
             if self.reid_extractor is not None and self.reid_extractor.enabled:
                 reid_emb = self.reid_extractor.extract(tracklet.best_crop)
                 tracklet.reid_embedding = reid_emb
+
+        # 确定 OCR 输入：优先用最大裁剪（车最近时），回退到最佳裁剪
+        if tracklet.largest_crop is not None:
+            lw = tracklet.largest_crop.shape[1]
+            if lw >= 250:  # 车辆宽度 >= 250px 时车牌约 80+ px，足够 OCR
+                ocr_crop = tracklet.largest_crop
+        if ocr_crop is None and tracklet.best_crop is not None:
+            ocr_crop = tracklet.best_crop
+
+        # 车牌检测 + OCR
+        if ocr_crop is not None and self.plate_detector is not None:
+            plate_result = self.plate_detector.detect(ocr_crop)
+            if plate_result is not None:
+                plate_img, _ = plate_result
+                if self.plate_ocr is not None and plate_img.size > 0:
+                    plate_number, _ = self.plate_ocr.recognize(plate_img)
+                    plate_hash = self.plate_ocr.hash_plate(plate_number)
+                    tracklet.plate_number = plate_number
+                    tracklet.plate_hash = plate_hash
 
         # 9. 组合完整向量
         vector = {

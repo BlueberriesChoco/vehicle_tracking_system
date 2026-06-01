@@ -93,7 +93,11 @@ class FramePipeline:
         return frame, new_vectors
 
     def _save_best_crops(self, frame: np.ndarray):
-        """为每个活跃轨迹保存置信度最高的检测裁剪图。"""
+        """为每个活跃轨迹保存置信度最高的检测裁剪图和最大尺寸裁剪图。
+
+        - best_crop: 最高置信度（用于颜色、车型识别）
+        - largest_crop: 最大 bbox 面积（车辆最近时，用于车牌 OCR）
+        """
         for tracklet in self.tracker.get_active_tracklets():
             if not tracklet.bboxes:
                 continue
@@ -107,11 +111,20 @@ class FramePipeline:
             if not (x2_c > x1_c and y2_c > y1_c):
                 continue
 
+            bbox_area = (x2_c - x1_c) * (y2_c - y1_c)
+            crop = frame[y1_c:y2_c, x1_c:x2_c]
+
             latest_conf = tracklet.confidences[-1] if tracklet.confidences else 0
             if latest_conf >= tracklet.best_confidence:
                 tracklet.best_confidence = latest_conf
-                tracklet.best_crop = frame[y1_c:y2_c, x1_c:x2_c].copy()
+                tracklet.best_crop = crop.copy()
                 tracklet.best_crop_bbox = [x1_c, y1_c, x2_c, y2_c]
+
+            # 保存最大裁剪（车辆最近时）
+            if bbox_area > tracklet.largest_bbox_area:
+                tracklet.largest_bbox_area = bbox_area
+                tracklet.largest_crop = crop.copy()
+                tracklet.largest_crop_bbox = [x1_c, y1_c, x2_c, y2_c]
 
     def finalize(self) -> List[dict]:
         """处理结束后，对未退出但已进入的轨迹也构建向量。"""
