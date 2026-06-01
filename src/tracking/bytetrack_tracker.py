@@ -15,7 +15,7 @@ class ByteTrackTracker:
     def __init__(
         self,
         track_buffer: int = 30,
-        match_thresh: float = 0.8,
+        match_thresh: float = 0.3,
         frame_rate: int = 25,
         min_hits: int = 3,
         camera_id: str = "cam01",

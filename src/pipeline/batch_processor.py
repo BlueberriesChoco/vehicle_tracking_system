@@ -90,7 +90,7 @@ class BatchProcessor:
 
         self.tracker = ByteTrackTracker(
             track_buffer=track_cfg.get("track_buffer", 30),
-            match_thresh=track_cfg.get("match_thresh", 0.8),
+            match_thresh=track_cfg.get("match_thresh", 0.3),
             frame_rate=self.frame_rate,
             min_hits=track_cfg.get("min_hits", 3),
             camera_id=camera_id,
@@ -360,6 +360,8 @@ class BatchProcessor:
         hour_str = "00"
 
         for i, part in enumerate(parts):
+            if len(part) >= 14 and part[:14].isdigit():
+                return part[:8], part[8:10]
             if len(part) == 8 and part.isdigit():
                 date_str = part
                 if i + 1 < len(parts) and len(parts[i + 1]) >= 2:
@@ -373,6 +375,11 @@ class BatchProcessor:
         """Parse the recording start timestamp from an hourly video filename."""
         parts = video_name.split("_")
         for index, part in enumerate(parts):
+            if len(part) >= 14 and part[:14].isdigit():
+                try:
+                    return datetime.strptime(part[:14], "%Y%m%d%H%M%S")
+                except ValueError:
+                    return None
             if len(part) == 8 and part.isdigit() and index + 1 < len(parts):
                 time_part = parts[index + 1]
                 if len(time_part) >= 6 and time_part[:6].isdigit():

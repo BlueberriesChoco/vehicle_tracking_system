@@ -17,7 +17,7 @@ detection:
 
 tracking:
   track_buffer: 30             # 丢失后保留帧数
-  match_thresh: 0.8            # IoU 匹配阈值
+  match_thresh: 0.3            # IoU 匹配阈值
   frame_rate: 25               # 视频帧率（用于时间计算）
   min_hits: 3                  # 最小连续检测次数才确认轨迹
 

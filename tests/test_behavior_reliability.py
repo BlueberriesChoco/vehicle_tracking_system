@@ -42,6 +42,17 @@ def test_tracker_reactivates_recently_lost_track():
     assert len(tracker.get_all_tracklets()) == 1
 
 
+def test_tracker_default_iou_threshold_tolerates_bbox_jitter():
+    tracker = ByteTrackTracker()
+    start = datetime(2026, 6, 1, 8, 0, 0)
+
+    tracker.update([_detection()], 0, start)
+    tracker.update([_detection((20, 0, 120, 100))], 1, start + timedelta(seconds=1))
+
+    assert tracker.get_tracklet(0).trajectory_length == 2
+    assert len(tracker.get_all_tracklets()) == 1
+
+
 def test_aggregation_excludes_current_vehicle():
     extractor = AggregationFeatureExtractor(_scene(), aggregation_radius_m=5)
 
@@ -214,3 +225,10 @@ def test_parse_video_start_time_from_hourly_filename():
     parsed = BatchProcessor._parse_video_start_time("ch01_20260520_080000_090000")
 
     assert parsed == datetime(2026, 5, 20, 8, 0, 0)
+
+
+def test_parse_download_video_timestamp():
+    name = "Download_CH05综保区A区中央路北_20260422080046_20260422093204_202606010928376"
+
+    assert BatchProcessor._parse_video_datetime(name) == ("20260422", "08")
+    assert BatchProcessor._parse_video_start_time(name) == datetime(2026, 4, 22, 8, 0, 46)

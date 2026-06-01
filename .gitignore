@@ -4,6 +4,10 @@
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # IDE
 .vscode/
+
+# Local validation artifacts
+data/validation/
