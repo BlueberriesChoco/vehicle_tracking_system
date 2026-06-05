@@ -15,6 +15,8 @@ class VectorWriter:
         "track_id", "global_vehicle_id", "segment_count",
         "camera_id", "vehicle_type", "vehicle_color",
         "plate_number", "plate_hash",
+        "geometry_level", "speed_reliable", "path_reliable",
+        "aggregation_reliable", "passage_reliable",
         "enter_time", "exit_time", "duration_sec", "trajectory_length_m",
         "avg_speed_ms", "max_speed_ms", "speed_variance",
         "max_dwell_sec", "stop_count", "dwell_ratio",

@@ -17,6 +17,61 @@
 
 ## 2026-06-01
 
+### 增加几何配置等级与可靠性标记
+
+提交：本次提交
+
+#### 修改原因
+
+后续会接入多个摄像头，不能要求每个摄像头一开始都完成精细标定；但如果完全不区分配置能力，未标定摄像头产生的速度、路径偏离和空间聚集特征会污染异常检测。为支持“先接入、后标定”的部署方式，本次增加几何能力分级和字段可靠性标记。
+
+#### 具体改动
+
+- 在 `SceneGeometry` 中增加 `geometry_level`：
+
+  ```text
+  none       未配置 ROI，几何相关字段不可靠
+  roi        已配置 ROI，但未完成完整进出线和参考标定
+  calibrated 已配置 ROI、进出线和参考距离，几何相关字段可参与风险评分
+  ```
+
+- 在行为向量中新增可靠性字段：
+
+  ```text
+  geometry_level
+  speed_reliable
+  path_reliable
+  aggregation_reliable
+  passage_reliable
+  ```
+
+- `BatchProcessor` 根据摄像头配置自动推断几何等级。
+- CSV 输出和日聚合结果保留上述可靠性字段。
+- 新增测试覆盖未配置、ROI 配置和完整标定三种模式。
+
+#### 涉及文件
+
+- `src/trajectory/scene_geometry.py`
+- `src/pipeline/batch_processor.py`
+- `src/behavior/behavior_vector.py`
+- `src/output/vector_writer.py`
+- `src/pipeline/daily_aggregator.py`
+- `tests/test_behavior_reliability.py`
+
+#### 验证
+
+```text
+20 passed
+compileall: OK
+git diff --check: OK
+```
+
+#### 影响
+
+- 未标定摄像头仍可输出检测、跟踪、时间、频次、颜色和车型等基础字段。
+- 下游异常检测应只使用 `*_reliable = 1` 的几何字段参与速度、路径偏离和聚集类风险评分。
+- 这会改变 CSV 表头；旧 CSV 与新 CSV 在字段数量上不完全一致。
+
 ### 根据实测优化视频解析与轨迹关联
 
 提交：`30dbf6e`

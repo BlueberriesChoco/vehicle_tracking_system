@@ -7,6 +7,7 @@ from src.behavior.features.speed_feature import SpeedFeatureExtractor
 from src.pipeline.frame_pipeline import FramePipeline
 from src.pipeline.daily_aggregator import DailyAggregator
 from src.pipeline.batch_processor import BatchProcessor
+from src.output.vector_writer import VectorWriter
 from src.tracking.bytetrack_tracker import ByteTrackTracker
 from src.tracking.tracklet import Tracklet
 from src.trajectory.scene_geometry import SceneGeometry
@@ -232,3 +233,57 @@ def test_parse_download_video_timestamp():
 
     assert BatchProcessor._parse_video_datetime(name) == ("20260422", "08")
     assert BatchProcessor._parse_video_start_time(name) == datetime(2026, 4, 22, 8, 0, 46)
+
+
+def test_geometry_reliability_flags_for_unconfigured_camera():
+    scene = SceneGeometry(((0, 0), (0, 0)), ((0, 0), (0, 0)), 20)
+
+    assert scene.geometry_level == "none"
+    assert scene.speed_reliable == 0
+    assert scene.path_reliable == 0
+    assert scene.aggregation_reliable == 0
+    assert scene.passage_reliable == 0
+
+
+def test_geometry_reliability_flags_for_calibrated_camera():
+    scene = SceneGeometry(
+        ((0, 0), (10, 0)),
+        ((0, 10), (10, 10)),
+        20,
+        geometry_level="calibrated",
+        has_roi=True,
+    )
+
+    assert scene.speed_reliable == 1
+    assert scene.path_reliable == 1
+    assert scene.aggregation_reliable == 1
+    assert scene.passage_reliable == 1
+
+
+def test_infer_geometry_level_modes():
+    calibration = {
+        "ref_length_m": 5,
+        "ref_point_1": [0, 0],
+        "ref_point_2": [100, 0],
+    }
+
+    assert BatchProcessor._infer_geometry_level(False, {}, {}, 20, calibration) == "none"
+    assert BatchProcessor._infer_geometry_level(True, {}, {}, 20, calibration) == "roi"
+    assert BatchProcessor._infer_geometry_level(
+        True,
+        {"p1": [0, 0], "p2": [10, 0]},
+        {"p1": [0, 10], "p2": [10, 10]},
+        20,
+        calibration,
+    ) == "calibrated"
+
+
+def test_vector_writer_includes_geometry_reliability_columns():
+    for column in [
+        "geometry_level",
+        "speed_reliable",
+        "path_reliable",
+        "aggregation_reliable",
+        "passage_reliable",
+    ]:
+        assert column in VectorWriter.CSV_COLUMNS

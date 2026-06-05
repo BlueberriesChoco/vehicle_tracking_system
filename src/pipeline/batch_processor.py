@@ -78,6 +78,7 @@ class BatchProcessor:
 
         # ROI 过滤器
         roi_polygon = cam_cfg.get("roi", {}).get("polygon", [])
+        has_configured_roi = bool(roi_polygon)
         if not roi_polygon:
             self.logger.warning("ROI polygon not configured, using full frame")
             roi_polygon = [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]
@@ -106,6 +107,14 @@ class BatchProcessor:
             if ref_px > 0:
                 px_per_meter = ref_px / calib["ref_length_m"]
 
+        geometry_level = self._infer_geometry_level(
+            has_configured_roi=has_configured_roi,
+            entry_line=entry_line,
+            exit_line=exit_line,
+            px_per_meter=px_per_meter,
+            calibration=calib,
+        )
+
         self.scene_geometry = SceneGeometry(
             entry_line=(
                 tuple(entry_line.get("p1", [0, 0])),
@@ -116,6 +125,8 @@ class BatchProcessor:
                 tuple(exit_line.get("p2", [0, 0])),
             ),
             px_per_meter=px_per_meter,
+            geometry_level=geometry_level,
+            has_roi=has_configured_roi,
         )
 
         # 轨迹平滑器
@@ -347,6 +358,29 @@ class BatchProcessor:
         dx = p2[0] - p1[0]
         dy = p2[1] - p1[1]
         return (dx * dx + dy * dy) ** 0.5
+
+    @staticmethod
+    def _infer_geometry_level(
+        has_configured_roi: bool,
+        entry_line: dict,
+        exit_line: dict,
+        px_per_meter: float,
+        calibration: dict,
+    ) -> str:
+        """Infer which geometry-dependent behavior fields are trustworthy."""
+        entry_valid = entry_line.get("p1", [0, 0]) != entry_line.get("p2", [0, 0])
+        exit_valid = exit_line.get("p1", [0, 0]) != exit_line.get("p2", [0, 0])
+        calibration_valid = (
+            px_per_meter > 0
+            and calibration.get("ref_length_m", 0) > 0
+            and calibration.get("ref_point_1", [0, 0]) != calibration.get("ref_point_2", [0, 0])
+        )
+
+        if has_configured_roi and entry_valid and exit_valid and calibration_valid:
+            return "calibrated"
+        if has_configured_roi:
+            return "roi"
+        return "none"
 
     @staticmethod
     def _parse_video_datetime(video_name: str) -> tuple:

@@ -15,6 +15,8 @@ class SceneGeometry:
         entry_line: Tuple[Tuple[float, float], Tuple[float, float]],
         exit_line: Tuple[Tuple[float, float], Tuple[float, float]],
         px_per_meter: float = 20.0,
+        geometry_level: str = "none",
+        has_roi: bool = False,
     ):
         """
         Args:
@@ -27,6 +29,8 @@ class SceneGeometry:
         self.exit_p1 = np.array(exit_line[0], dtype=np.float64)
         self.exit_p2 = np.array(exit_line[1], dtype=np.float64)
         self.px_per_meter = px_per_meter
+        self.geometry_level = geometry_level
+        self.has_roi = has_roi
 
     def check_line_crossing(
         self,
@@ -61,6 +65,26 @@ class SceneGeometry:
     def has_valid_exit_line(self) -> bool:
         """出口线是否有效（两端点不同）。"""
         return not np.array_equal(self.exit_p1, self.exit_p2)
+
+    @property
+    def speed_reliable(self) -> int:
+        return int(self.geometry_level == "calibrated")
+
+    @property
+    def path_reliable(self) -> int:
+        return int(self.geometry_level == "calibrated")
+
+    @property
+    def aggregation_reliable(self) -> int:
+        return int(self.geometry_level == "calibrated")
+
+    @property
+    def passage_reliable(self) -> int:
+        return int(
+            self.has_roi
+            and self.has_valid_entry_line()
+            and self.has_valid_exit_line()
+        )
 
     def pixel_to_world(self, px_distance: float) -> float:
         """像素距离 → 世界距离（米）。"""
