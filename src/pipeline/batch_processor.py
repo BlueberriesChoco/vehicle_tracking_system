@@ -330,14 +330,14 @@ class BatchProcessor:
     def _init_plate_detector(model_cfg: dict):
         plate_cfg = model_cfg.get("plate", {}) if model_cfg else {}
         if plate_cfg.get("enabled", False):
-            return PlateDetector(model_path=plate_cfg.get("detector_weights"))
+            return PlateDetector(model_path=plate_cfg.get("detector_weights"), conf_threshold=plate_cfg.get("detector_conf", 0.35), min_plate_width=plate_cfg.get("min_plate_width", 80))
         return None
 
     @staticmethod
     def _init_plate_ocr(model_cfg: dict):
         plate_cfg = model_cfg.get("plate", {}) if model_cfg else {}
         if plate_cfg.get("enabled", False):
-            return PlateOCR(engine=plate_cfg.get("ocr_engine", "paddleocr"))
+            return PlateOCR(engine=plate_cfg.get("ocr_engine", "easyocr"), lang=plate_cfg.get("ocr_lang", "en"), min_confidence=plate_cfg.get("ocr_min_conf", 0.55))
         return None
 
     @staticmethod
@@ -347,6 +347,8 @@ class BatchProcessor:
             return ReIDExtractor(
                 model_name=reid_cfg.get("model_name", "osnet_x1_0"),
                 weights_path=reid_cfg.get("weights"),
+                backend=reid_cfg.get("backend", "auto"),
+                allow_torchvision_fallback=reid_cfg.get("allow_torchvision_fallback", False),
             )
         return None
 
@@ -422,3 +424,5 @@ class BatchProcessor:
                     except ValueError:
                         return None
         return None
+
+

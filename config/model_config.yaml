@@ -20,12 +20,21 @@ classifier:
   weights: "models/vehicle_type_model.pth"    # 可选：有 CNN 模型时更准确
 
 plate:
-  enabled: true                   # EasyOCR + 形态学检测
-  detector_weights: ""
+  enabled: true                   # 优先使用专用YOLO车牌模型，缺失时回退形态学检测
+  detector_weights: "models/license_plate_yolov8.pt"
+  detector_conf: 0.35
+  min_plate_width: 80
   ocr_engine: "easyocr"
+  ocr_lang: "en"
+  ocr_min_conf: 0.55
 
 reid:
-  enabled: false                  # 需要 OSNet 模型权重文件
+  enabled: true                   # 无OSNet权重时使用HSV直方图+形状特征fallback
+  backend: "auto"                 # auto / torchreid / torchvision / histogram
   model_name: "osnet_x1_0"
   weights: "models/reid_model.pth"
-  embedding_dim: 512
+  allow_torchvision_fallback: false
+  embedding_dim: 74
+
+
+

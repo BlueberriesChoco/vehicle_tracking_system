@@ -22,9 +22,10 @@ class PlateOCR:
         r"|([A-HJ-NP-Z]{1}[A-HJ-NP-Z0-9]{4,5}[A-HJ-NP-Z]{1})"
     )
 
-    def __init__(self, engine: str = "paddleocr", lang: str = "ch"):
+    def __init__(self, engine: str = "paddleocr", lang: str = "ch", min_confidence: float = 0.55):
         self.engine = engine
         self.lang = lang
+        self.min_confidence = min_confidence
         self.ocr = None
         self.enabled = True
         self._init_engine()
@@ -74,7 +75,10 @@ class PlateOCR:
         text, confidence = self._recognize_internal(plate_image)
 
         text = self._clean_plate(text)
-        return text, round(confidence, 3)
+        confidence = round(confidence, 3)
+        if confidence < self.min_confidence:
+            return "", confidence
+        return text, confidence
 
     def _recognize_internal(self, plate_image: np.ndarray) -> Tuple[str, float]:
         """调用 OCR 引擎识别。"""
@@ -164,3 +168,4 @@ class PlateOCR:
 
         # 回到 BGR
         return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+

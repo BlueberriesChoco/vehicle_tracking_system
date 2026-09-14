@@ -145,6 +145,7 @@ class BehaviorVectorizer:
         vehicle_type = tracklet.class_name  # Phase 1 默认用 YOLO 类别
         plate_number = ""
         plate_hash = ""
+        plate_confidence = 0.0
 
         # ▸▸▸ Phase 2: 车辆属性特征提取 ◂◂◂
         ocr_crop = None  # 用于车牌 OCR 的裁剪图
@@ -182,7 +183,7 @@ class BehaviorVectorizer:
             if plate_result is not None:
                 plate_img, _ = plate_result
                 if self.plate_ocr is not None and plate_img.size > 0:
-                    plate_number, _ = self.plate_ocr.recognize(plate_img)
+                    plate_number, plate_confidence = self.plate_ocr.recognize(plate_img)
                     plate_hash = self.plate_ocr.hash_plate(plate_number)
                     tracklet.plate_number = plate_number
                     tracklet.plate_hash = plate_hash
@@ -202,6 +203,7 @@ class BehaviorVectorizer:
             "vehicle_color": vehicle_color,
             "plate_number": plate_number,
             "plate_hash": plate_hash,
+            "plate_confidence": plate_confidence,
             "geometry_level": self.scene.geometry_level,
             "speed_reliable": self.scene.speed_reliable,
             "path_reliable": self.scene.path_reliable,

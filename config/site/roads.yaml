@@ -1,0 +1,8 @@
+roads:
+  - road_id: zone_a_nmv_entrance_lane
+    name: "Zone A NMV Entrance Lane"
+    zone_id: zone_a_gate_nmv_entrance
+    road_type: entrance_lane
+    direction: inbound
+    speed_limit_kmh: null
+    adjacent_road_ids: []

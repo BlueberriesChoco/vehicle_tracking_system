@@ -1,0 +1,9 @@
+edges: []
+
+# Add directed road/camera transitions after more cameras are calibrated.
+# Example:
+# - from_camera_id: cam01
+#   to_camera_id: cam02
+#   min_travel_sec: 10
+#   max_travel_sec: 180
+#   route_id: zone_a_gate_to_internal_road

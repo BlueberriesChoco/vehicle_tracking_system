@@ -15,6 +15,67 @@
 - 已具备能力：YOLOv8 车辆检测、ROI 过滤、简化 ByteTrack 跟踪、轨迹平滑、速度和停留分析、路径特征、时间特征、聚集特征、颜色识别、启发式车型识别、车牌区域检测、OCR 接口、ReID 接口、CSV 输出和日聚合骨架。
 - 尚未完成：中央路北摄像头专属 ROI、进出线和透视标定；稳定车牌识别；正式 ReID 模型；异常检测基线训练；关系图谱和风险融合评分。
 
+## 2026-09-14
+
+### 增加空间语义配置骨架
+
+#### 修改原因
+
+后续要从单摄像头行为向量升级到多摄像头路径分析，需要先建立园区、区域、道路、摄像头和拓扑关系的配置结构。否则道路摄像头数据只能作为独立视频处理，无法判断路径是否合理，也无法设置跨摄像头通行时间窗口。
+
+#### 具体改动
+
+- 新增 `config/site/site.yaml`：园区基础信息。
+- 新增 `config/site/zones.yaml`：区域和卡口定义。
+- 新增 `config/site/roads.yaml`：道路和车道定义。
+- 新增 `config/site/cameras.yaml`：摄像头到道路/区域的绑定。
+- 新增 `config/site/topology.yaml`：跨摄像头/道路边关系骨架。
+- 新增 `config/site/routes.yaml`：业务合法路线骨架。
+- 新增 `src/site/topology.py`，提供配置读取和引用校验。
+- 新增 `tests/test_site_topology.py`，覆盖默认配置加载和缺失引用报错。
+- `.gitignore` 增加 `data/outputs/`，避免提交本地批处理结果。
+
+#### 验证
+
+```text
+compileall: OK
+26 passed
+```
+
+#### 数据使用说明
+
+- Phase 1/2 只需要每个摄像头少量短样本，用于画面质量、ROI、跟踪和属性提取验证。
+- Phase 3 需要多天历史道路摄像头数据，用于训练正常行为基线。
+- Phase 4 需要多摄像头连续视频或结构化事件，用于跨摄像头全域轨迹拼接。
+### 稳定 Phase 2 车辆属性提取
+
+#### 修改原因
+
+车牌 OCR 在全景监控视频中会出现低置信误识别；同时 ReID 依赖外部 OSNet 权重，缺失权重时无法输出外观特征。为让 Phase 2 在没有专用模型权重时也能稳定输出，本次增加车牌检测模型缺失回退、OCR 置信度过滤和无模型 ReID fallback。
+
+#### 具体改动
+
+- `PlateDetector` 支持专用 YOLO 车牌模型路径、检测置信度和最小车牌宽度配置。
+- 专用车牌模型缺失时自动回退到形态学检测，不中断流水线。
+- `PlateOCR` 增加 `min_confidence`，低于阈值时清空 `plate_number`，但保留置信度证据。
+- CSV 新增 `plate_confidence` 字段。
+- `ReIDExtractor` 增加无模型 fallback：HSV 颜色直方图 + 车辆框形状特征，输出 74 维归一化 embedding。
+- `model_config.yaml` 启用 ReID fallback，并配置预留车牌 YOLO 权重路径 `models/license_plate_yolov8.pt`。
+- 增加回归测试覆盖车牌模型缺失回退、ReID fallback、OCR 低置信过滤和 CSV 字段。
+
+#### 验证
+
+```text
+compileall: OK
+24 passed
+短样本真实视频 1200 帧：输出 3 条车辆向量，reid_embedding 已写入，低置信 OCR 被过滤。
+```
+
+#### 已知限制
+
+- 当前仓库还没有 `models/license_plate_yolov8.pt`，车牌检测仍会回退到形态学方法。
+- 全景视频中车牌较小时，OCR 结果只能作为低置信候选，不应作为正式身份依据。
+- 无模型 ReID fallback 适合先做跨段候选召回，不等同于正式车辆 ReID 模型。
 ## 2026-06-01
 
 ### 重写 README 使用说明
@@ -243,3 +304,5 @@ git diff --check: OK
 4. 用较长时间窗口重新生成行为向量，并检查轨迹碎片率、速度分布和聚集指数。
 5. 建立正常行为基线，再接入无监督异常检测。
 6. 在车辆、司机、企业和时间维度形成结构化关联数据，为关系图谱和风险融合评分提供输入。
+
+

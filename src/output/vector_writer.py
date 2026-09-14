@@ -14,7 +14,7 @@ class VectorWriter:
     CSV_COLUMNS = [
         "track_id", "global_vehicle_id", "segment_count",
         "camera_id", "vehicle_type", "vehicle_color",
-        "plate_number", "plate_hash",
+        "plate_number", "plate_hash", "plate_confidence",
         "geometry_level", "speed_reliable", "path_reliable",
         "aggregation_reliable", "passage_reliable",
         "enter_time", "exit_time", "duration_sec", "trajectory_length_m",

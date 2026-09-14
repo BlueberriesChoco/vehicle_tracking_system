@@ -18,7 +18,10 @@
       "Bash(\"D:/Code/vehicle_tracking_system/.venv/Scripts/pip.exe\" uninstall *)",
       "Bash(\"D:/Code/vehicle_tracking_system/.venv/Scripts/pip.exe\" list *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(cd \"D:/Code/roguelike-hero\" && find . -type f -not -path './node_modules/*' | sort)",
+      "Read(//d/Code/roguelike-hero/**)",
+      "Bash(.venv/Scripts/python.exe -c ' *)"
     ],
     "additionalDirectories": [
       "d:\\Code\\vehicle_tracking_system\\config"

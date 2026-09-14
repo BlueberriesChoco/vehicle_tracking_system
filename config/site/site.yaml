@@ -1,0 +1,10 @@
+site_id: bonded_zone_demo
+site_name: "Bonded Zone Demo"
+timezone: "Asia/Shanghai"
+
+# Site-level coordinate system is optional at this stage.
+# Fill map_origin and scale only after a reliable site map is available.
+map:
+  coordinate_system: "local"
+  map_origin: null
+  meters_per_unit: 1.0

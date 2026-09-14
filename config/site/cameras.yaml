@@ -1,0 +1,12 @@
+cameras:
+  - camera_id: cam01
+    name: "Camera cam01"
+    zone_id: zone_a_gate_nmv_entrance
+    road_id: zone_a_nmv_entrance_lane
+    role: gate_overview
+    config_file: "config/camera/cam01.yaml"
+    stream_url: null
+    video_dir: "F:/test_videos/zone_a_nmv_entrance"
+    supports_plate_capture: false
+    supports_reid: true
+    notes: "Overview video can support tracking and vehicle attributes; plate OCR needs a closer camera or dedicated plate model."

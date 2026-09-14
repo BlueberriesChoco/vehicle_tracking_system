@@ -287,3 +287,45 @@ def test_vector_writer_includes_geometry_reliability_columns():
         "passage_reliable",
     ]:
         assert column in VectorWriter.CSV_COLUMNS
+
+
+def test_plate_detector_falls_back_when_yolo_weight_missing():
+    from src.feature_extraction.plate_detector import PlateDetector
+
+    detector = PlateDetector(model_path="models/missing_license_plate.pt")
+
+    assert detector.use_yolo is False
+    assert detector.model is None
+
+
+def test_reid_histogram_fallback_returns_normalized_embedding():
+    from src.feature_extraction.reid_extractor import ReIDExtractor
+
+    crop = np.zeros((80, 120, 3), dtype=np.uint8)
+    crop[:, :60] = (255, 255, 255)
+    extractor = ReIDExtractor(weights_path="models/missing_reid_model.pth")
+
+    embedding = extractor.extract(crop)
+
+    assert extractor.enabled is True
+    assert extractor.active_backend == "histogram"
+    assert embedding.shape == (74,)
+    assert np.linalg.norm(embedding) > 0
+    assert np.isclose(np.linalg.norm(embedding), 1.0)
+
+
+
+def test_vector_writer_includes_plate_confidence_column():
+    assert "plate_confidence" in VectorWriter.CSV_COLUMNS
+
+
+def test_plate_ocr_filters_low_confidence_result():
+    from src.feature_extraction.plate_ocr import PlateOCR
+
+    ocr = PlateOCR(engine="none", lang="en", min_confidence=0.55)
+    ocr._recognize_internal = lambda image: ("FDK7S", 0.305)
+
+    plate, confidence = ocr.recognize(np.zeros((32, 128, 3), dtype=np.uint8))
+
+    assert plate == ""
+    assert confidence == 0.305

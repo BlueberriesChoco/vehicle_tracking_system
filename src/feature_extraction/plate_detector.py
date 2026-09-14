@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Tuple, List
 import numpy as np
 import cv2
@@ -20,19 +21,28 @@ class PlateDetector:
     PLATE_AREA_MIN = 500      # 最小像素面积
     PLATE_AREA_MAX = 50000    # 最大像素面积
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        conf_threshold: float = 0.35,
+        min_plate_width: int = 80,
+    ):
         self.model = None
-        self.use_yolo = bool(model_path)
+        self.model_path = model_path or ""
+        self.conf_threshold = conf_threshold
+        self.min_plate_width = min_plate_width
+        self.use_yolo = bool(self.model_path) and os.path.exists(self.model_path)
 
         if self.use_yolo:
-            self._load_yolo(model_path)
+            self._load_yolo(self.model_path)
 
     def _load_yolo(self, model_path: str):
         try:
             from ultralytics import YOLO
             self.model = YOLO(model_path)
-        except ImportError:
+        except (ImportError, Exception):
             self.use_yolo = False
+            self.model = None
 
     def detect(self, vehicle_crop: np.ndarray) -> Optional[Tuple[np.ndarray, list]]:
         """在车辆裁剪区域内检测车牌。
@@ -114,19 +124,34 @@ class PlateDetector:
 
     def _detect_with_yolo(self, crop: np.ndarray) -> Optional[Tuple[np.ndarray, list]]:
         """使用 YOLO 模型检测车牌。"""
-        results = self.model(crop, conf=0.3, verbose=False)
+        results = self.model(crop, conf=self.conf_threshold, verbose=False)
+        best_box = None
+        best_score = -1.0
 
         for result in results:
             if result.boxes is None:
                 continue
             boxes = result.boxes.xyxy.cpu().numpy()
-            if len(boxes) > 0:
-                x1, y1, x2, y2 = boxes[0].astype(int)
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(crop.shape[1], x2), min(crop.shape[0], y2)
-                plate_img = crop[y1:y2, x1:x2]
-                corners = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
-                return plate_img, corners
+            confs = result.boxes.conf.cpu().numpy()
+            for box, conf in zip(boxes, confs):
+                x1, y1, x2, y2 = box.astype(int)
+                width = x2 - x1
+                height = y2 - y1
+                if width < self.min_plate_width or height <= 0:
+                    continue
+                area_score = min((width * height) / 3000.0, 1.0)
+                score = float(conf) + 0.15 * area_score
+                if score > best_score:
+                    best_score = score
+                    best_box = (x1, y1, x2, y2)
+
+        if best_box is not None:
+            x1, y1, x2, y2 = best_box
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(crop.shape[1], x2), min(crop.shape[0], y2)
+            plate_img = crop[y1:y2, x1:x2]
+            corners = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+            return plate_img, corners
 
         return None
 
@@ -159,3 +184,4 @@ class PlateDetector:
         M = cv2.getPerspectiveTransform(src_pts, dst_pts)
         warped = cv2.warpPerspective(crop, M, output_size)
         return warped
+

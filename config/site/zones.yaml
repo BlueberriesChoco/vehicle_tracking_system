@@ -1,0 +1,11 @@
+zones:
+  - zone_id: zone_a
+    name: "Zone A"
+    type: bonded_area
+    description: "Primary monitored area."
+
+  - zone_id: zone_a_gate_nmv_entrance
+    name: "Zone A NMV Entrance"
+    type: gate
+    parent_zone_id: zone_a
+    description: "A-zone non-motor vehicle lane entrance."
