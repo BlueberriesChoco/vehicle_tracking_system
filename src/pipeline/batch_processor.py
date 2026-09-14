@@ -19,6 +19,7 @@ from ..feature_extraction.plate_detector import PlateDetector
 from ..feature_extraction.plate_ocr import PlateOCR
 from ..feature_extraction.reid_extractor import ReIDExtractor
 from ..output.vector_writer import VectorWriter
+from ..output.event_writer import EventWriter
 from ..visualization.draw import Visualizer
 from ..utils.frame_reader import FrameReader
 from ..utils.logger import get_logger
@@ -203,6 +204,8 @@ class BatchProcessor:
         self.vector_writer = VectorWriter(
             output_format=output_cfg.get("format", "csv"),
         )
+        self.event_writer = EventWriter()
+        self.event_output_enabled = output_cfg.get("save_events", True)
 
         self.frame_skip = pipeline_cfg.get("frame_skip", 1)
         self.max_frames = pipeline_cfg.get("max_frames", 0)
@@ -307,6 +310,15 @@ class BatchProcessor:
         self.logger.info(
             f"Output: {csv_path} ({len(all_vectors)} vehicle vectors)"
         )
+
+        if self.event_output_enabled:
+            event_output_dir = os.path.join(output_dir, "events", camera_id, date_str)
+            event_filename = f"events_{camera_id}_{date_str}_{hour_str}.csv"
+            event_path = os.path.join(event_output_dir, event_filename)
+            self.event_writer.write(all_vectors, event_path)
+            self.logger.info(
+                f"Events: {event_path} ({len(all_vectors)} vehicle passage events)"
+            )
 
         return csv_path
 
@@ -424,5 +436,3 @@ class BatchProcessor:
                     except ValueError:
                         return None
         return None
-
-

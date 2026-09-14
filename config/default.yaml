@@ -39,6 +39,7 @@ behavior:
 output:
   format: "csv"                # csv / parquet
   save_trajectory_plot: true   # 是否保存轨迹图
+  save_events: true            # 是否输出车辆通行事件CSV
   save_anomaly_only: false     # 仅输出异常车辆
 
 visualization:

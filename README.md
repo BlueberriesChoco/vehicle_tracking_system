@@ -186,6 +186,7 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `vehicle_color` | 车辆颜色 |
 | `plate_number` | OCR 识别车牌号，可能为空 |
 | `plate_hash` | 车牌哈希 |
+| `plate_confidence` | OCR 车牌识别置信度，低置信时 `plate_number` 为空 |
 | `geometry_level` | 摄像头几何配置等级 |
 | `speed_reliable` | 速度字段是否可靠 |
 | `path_reliable` | 路径偏离字段是否可靠 |
@@ -396,8 +397,6 @@ CHANGELOG.md
 2. 为中央路北摄像头配置 ROI。
 3. 建立 `config/site/` 空间语义配置骨架。
 4. 将摄像头绑定到道路和区域。
-5. 生成车辆通行事件。
-6. 接入规则告警。
-7. 训练正常行为基线。
-8. 接入企业、司机、车辆和申报单数据。
-
+5. 接入规则告警。
+6. 训练正常行为基线。
+7. 接入企业、司机、车辆和申报单数据。
