@@ -1,53 +1,48 @@
-from typing import List
-import numpy as np
+from typing import List, Optional
 
+from .baseline import BaselineBuilder, BaselineStore
 from .rule_engine import RuleEngine
 
 
 class AnomalyDetector:
-    """异常检测器（Phase 3 启用）。
+    """Phase 3 anomaly detector combining rules and normal-behavior baselines."""
 
-    组合规则引擎和统计模型（隔离森林/LOF），
-    对行为向量做多级异常判定。
-    """
-
-    def __init__(self):
-        self.rule_engine = RuleEngine()
-        self.statistical_model = None  # Phase 3: IsolationForest / LOF
+    def __init__(
+        self,
+        thresholds: Optional[dict] = None,
+        baseline: Optional[dict] = None,
+        baseline_path: Optional[str] = None,
+        baseline_threshold: float = 3.0,
+    ):
+        self.rule_engine = RuleEngine(thresholds=thresholds)
+        self.baseline_builder = BaselineBuilder()
+        self.baseline = baseline or (BaselineStore.load(baseline_path) if baseline_path else None)
+        self.baseline_threshold = baseline_threshold
 
     def detect(self, vectors: List[dict]) -> List[dict]:
-        """对一批行为向量执行异常检测。
+        """Annotate vectors or passage events with anomaly fields."""
+        results = []
+        for vector in vectors:
+            record = dict(vector)
+            reasons = self.rule_engine.check(record)
+            baseline_score = 0.0
+            baseline_feature_count = 0
 
-        Returns:
-            每个向量增加 anomaly_score, is_anomaly, alert_reason 字段
-        """
-        for vec in vectors:
-            # 规则引擎
-            reasons = self.rule_engine.check(vec)
+            if self.baseline is not None:
+                baseline_result = self.baseline_builder.score(
+                    record,
+                    self.baseline,
+                    threshold=self.baseline_threshold,
+                )
+                baseline_score = baseline_result["baseline_score"]
+                baseline_feature_count = baseline_result["baseline_feature_count"]
+                if baseline_result["baseline_anomaly"]:
+                    reasons.extend(baseline_result["baseline_reasons"])
 
-            # 统计模型（Phase 3 启用）
-            anomaly_score = 0.0
-            if self.statistical_model is not None:
-                numeric = np.array([[
-                    vec.get("avg_speed_ms", 0),
-                    vec.get("max_speed_ms", 0),
-                    vec.get("speed_variance", 0),
-                    vec.get("max_dwell_sec", 0),
-                    vec.get("stop_count", 0),
-                    vec.get("dwell_ratio", 0),
-                    vec.get("path_deviation", 0),
-                    vec.get("path_smoothness", 0),
-                    vec.get("night_ratio", 0),
-                    vec.get("freq_index", 0),
-                    vec.get("aggregation_index", 0),
-                ]])
-                # 孤立森林预测
-                # pred = self.statistical_model.predict(numeric)
-                # anomaly_score = float(pred[0])
-                pass
+            record["baseline_feature_count"] = baseline_feature_count
+            record["anomaly_score"] = round(float(baseline_score), 3)
+            record["is_anomaly"] = 1 if reasons else 0
+            record["alert_reason"] = ";".join(reasons)
+            results.append(record)
 
-            vec["anomaly_score"] = round(anomaly_score, 3)
-            vec["is_anomaly"] = 1 if (reasons or anomaly_score < -0.5) else 0
-            vec["alert_reason"] = ";".join(reasons) if reasons else ""
-
-        return vectors
+        return results

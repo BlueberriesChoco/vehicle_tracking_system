@@ -1,0 +1,17 @@
+# Phase 3 anomaly detection configuration
+
+baseline:
+  min_days: 7
+  min_samples: 100
+  output_dir: "data/references"
+  default_threshold: 3.0
+
+rules:
+  speed_max_kmh: 40.0
+  dwell_max_sec: 120.0
+  deviation_max_m: 3.0
+  night_stop_count: 2
+
+output:
+  alerts_dir: "data/outputs/alerts"
+  anomaly_only: true

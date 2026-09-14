@@ -17,6 +17,37 @@
 
 ## 2026-09-14
 
+### 搭建 Phase 3 基线和告警框架
+
+#### 修改原因
+
+Phase 1/2 已能稳定输出行为向量和车辆通行事件，下一步需要基于多天历史数据建立正常行为范围，并对新数据输出可复核的异常告警。Phase 3 框架应复用既有 CSV，不重复执行视频检测。
+
+#### 具体改动
+
+- 新增 `src/anomaly/baseline.py`，提供正常行为基线构建、保存、加载和 Z-score 评分。
+- 升级 `src/anomaly/anomaly_detector.py`，支持规则告警和统计基线联合判定。
+- 升级 `src/anomaly/rule_engine.py`，按可靠性字段跳过未标定速度和路径规则。
+- 新增 `src/output/alert_writer.py`，输出可复核的告警 CSV。
+- 重写 `scripts/build_baseline.py`，生成标准 Phase 3 JSON 基线文件。
+- 新增 `scripts/run_anomaly_detection.py`，从行为向量 CSV 离线生成告警 CSV。
+- 新增 `config/anomaly_config.yaml`，记录 Phase 3 基线、规则和告警输出默认配置。
+- 新增 `tests/test_phase3_anomaly.py`，覆盖基线构建、异常评分、可靠性过滤和告警输出。
+- README 增加 Phase 3 基线构建和告警检测使用说明。
+
+#### 验证
+
+```text
+compileall: OK
+33 passed
+Phase3 CLI 临时样本：build_baseline.py 成功生成 JSON 基线，run_anomaly_detection.py 成功输出 1 条告警
+```
+
+#### 已知限制
+
+- 当前统计基线是轻量 JSON 基线，适合先做离线筛查；后续可在样本充足后接入 IsolationForest、LOF 或时序模型。
+- 正常行为基线质量依赖多天真实数据，短样本只能验证流程，不能代表正式阈值。
+- 告警结果目前是离线 CSV，还未接入可视化复核和业务关系数据。
 ### 增加车辆通行事件输出
 
 #### 修改原因

@@ -64,9 +64,9 @@
 - 未配置 ROI 的摄像头会使用全画面，可能混入路边停车或无关道路车辆。
 - 未透视标定的摄像头，速度、路径偏离、车辆间距不能作为正式风险依据。
 - 远景监控下车牌通常像素不足，OCR 不稳定。
-- `anomaly_score`、`is_anomaly`、`alert_reason` 当前仍主要是占位字段，规则告警和统计异常模型尚未正式接入主流程。
+- `anomaly_score`、`is_anomaly`、`alert_reason` 已可通过 Phase 3 脚本离线生成，但尚未和视频处理主流程实时联动。
 - 尚未接入企业、司机、仓库、申报单、车辆授权关系。
-- 尚未建立园区空间语义地图和摄像头拓扑。
+- 园区空间语义地图和摄像头拓扑已有配置骨架，仍需要填入真实道路、摄像头和业务路线数据。
 
 ## 项目结构
 
@@ -216,6 +216,42 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `is_anomaly` | 是否异常，占位或待接入 |
 | `alert_reason` | 告警原因，占位或待接入 |
 
+## Phase 3 基线和告警
+
+Phase 3 不直接重跑视频检测，而是读取 Phase 1/2 已生成的行为向量 CSV，建立正常行为基线并输出告警 CSV。
+
+构建单摄像头正常行为基线：
+
+```bash
+python scripts/build_baseline.py \
+  --vector-dir data/outputs/vectors/cam01 \
+  --camera cam01 \
+  --output data/references/baseline_cam01.json
+```
+
+运行异常检测：
+
+```bash
+python scripts/run_anomaly_detection.py \
+  --input data/outputs/vectors/cam01 \
+  --baseline data/references/baseline_cam01.json \
+  --output data/outputs/alerts/alerts_cam01.csv
+```
+
+告警 CSV 输出位置建议为：
+
+```text
+data/outputs/alerts/alerts_<camera_id>.csv
+```
+
+当前 Phase 3 基础框架包含两类判断：
+
+| 类型 | 说明 |
+|---|---|
+| 规则告警 | 超速、长时间滞留、路径偏离、夜间频繁停留 |
+| 统计基线 | 使用历史正常行为的均值和标准差计算各字段 Z-score |
+
+规则和统计基线都会尊重可靠性字段。比如 `speed_reliable = 0` 时，不使用速度触发超速告警；`path_reliable = 0` 时，不使用路径偏离触发告警。
 ## 摄像头配置等级
 
 系统支持多摄像头渐进接入，不要求所有摄像头一开始都完成精细标定。
