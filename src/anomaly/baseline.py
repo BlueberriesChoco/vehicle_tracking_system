@@ -53,8 +53,9 @@ class BaselineStore:
 class BaselineBuilder:
     """Build and apply camera-level normal behavior baselines from vector CSV rows."""
 
-    def __init__(self, features: Optional[List[FeatureSpec]] = None):
+    def __init__(self, features: Optional[List[FeatureSpec]] = None, target_groups: Optional[List[str]] = None):
         self.features = features or DEFAULT_FEATURES
+        self.target_groups = set(target_groups or ["ordinary"])
 
     def load_vectors(self, vector_dir: str, recursive: bool = True) -> List[dict]:
         pattern = os.path.join(vector_dir, "**", "vec_*.csv") if recursive else os.path.join(vector_dir, "vec_*.csv")
@@ -68,7 +69,7 @@ class BaselineBuilder:
         return rows
 
     def build(self, vectors: Iterable[dict], camera_id: str = "unknown") -> dict:
-        vectors = list(vectors)
+        vectors = self.filter_analysis_targets(vectors)
         stats = {}
         for spec in self.features:
             values = self._valid_values(vectors, spec)
@@ -80,6 +81,7 @@ class BaselineBuilder:
             "version": 1,
             "kind": "phase3_behavior_baseline",
             "camera_id": camera_id,
+            "target_groups": sorted(self.target_groups),
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "sample_count": len(vectors),
             "feature_columns": [spec.name for spec in self.features],
@@ -108,8 +110,7 @@ class BaselineBuilder:
             std = float(stat.get("std") or 1.0)
             if std == 0:
                 std = 1.0
-            zscore = (value - float(stat.get("mean", 0.0))) / std
-            zscore = round(float(zscore), 3)
+            zscore = round(float((value - float(stat.get("mean", 0.0))) / std), 3)
             feature_scores[spec.name] = zscore
             if abs(zscore) >= threshold:
                 reasons.append(f"{spec.name}_zscore={zscore}")
@@ -124,6 +125,16 @@ class BaselineBuilder:
             "baseline_reasons": reasons if enough_features else [],
             "feature_zscores": feature_scores,
         }
+
+    def filter_analysis_targets(self, vectors: Iterable[dict]) -> List[dict]:
+        return [vector for vector in vectors if self.is_analysis_target(vector)]
+
+    def is_analysis_target(self, vector: dict) -> bool:
+        explicit = vector.get("analysis_target")
+        if explicit is not None and str(explicit).strip() != "":
+            return str(explicit).strip().lower() in {"1", "true", "yes"}
+        group = str(vector.get("vehicle_group", "ordinary")).strip().lower()
+        return group in self.target_groups
 
     def _valid_values(self, vectors: List[dict], spec: FeatureSpec) -> np.ndarray:
         values = []

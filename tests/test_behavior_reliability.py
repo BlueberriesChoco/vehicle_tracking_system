@@ -329,3 +329,17 @@ def test_plate_ocr_filters_low_confidence_result():
 
     assert plate == ""
     assert confidence == 0.305
+
+
+def test_vehicle_classifier_groups_freight_and_ordinary_types():
+    from src.feature_extraction.vehicle_classifier import VehicleClassifier
+
+    assert VehicleClassifier.group_vehicle_type("truck") == "freight"
+    assert VehicleClassifier.group_vehicle_type("suv") == "ordinary"
+    assert VehicleClassifier.is_ordinary_vehicle("sedan") is True
+    assert VehicleClassifier.is_ordinary_vehicle("truck") is False
+
+
+def test_vector_writer_includes_analysis_scope_columns():
+    assert "vehicle_group" in VectorWriter.CSV_COLUMNS
+    assert "analysis_target" in VectorWriter.CSV_COLUMNS

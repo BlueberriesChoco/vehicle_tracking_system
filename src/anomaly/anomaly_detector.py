@@ -13,9 +13,10 @@ class AnomalyDetector:
         baseline: Optional[dict] = None,
         baseline_path: Optional[str] = None,
         baseline_threshold: float = 3.0,
+        target_groups: Optional[list] = None,
     ):
         self.rule_engine = RuleEngine(thresholds=thresholds)
-        self.baseline_builder = BaselineBuilder()
+        self.baseline_builder = BaselineBuilder(target_groups=target_groups)
         self.baseline = baseline or (BaselineStore.load(baseline_path) if baseline_path else None)
         self.baseline_threshold = baseline_threshold
 
@@ -24,11 +25,13 @@ class AnomalyDetector:
         results = []
         for vector in vectors:
             record = dict(vector)
-            reasons = self.rule_engine.check(record)
+            is_target = self.baseline_builder.is_analysis_target(record)
+            record["analysis_target"] = int(is_target)
+            reasons = self.rule_engine.check(record) if is_target else []
             baseline_score = 0.0
             baseline_feature_count = 0
 
-            if self.baseline is not None:
+            if is_target and self.baseline is not None:
                 baseline_result = self.baseline_builder.score(
                     record,
                     self.baseline,

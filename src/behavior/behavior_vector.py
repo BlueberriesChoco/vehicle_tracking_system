@@ -15,6 +15,7 @@ from .features.temporal_feature import TemporalFeatureExtractor
 from .features.frequency_feature import FrequencyFeatureExtractor
 from .features.aggregation_feature import AggregationFeatureExtractor
 from .feature_normalizer import FeatureNormalizer
+from ..feature_extraction.vehicle_classifier import VehicleClassifier
 
 
 class BehaviorVectorizer:
@@ -143,6 +144,7 @@ class BehaviorVectorizer:
         # ▸▸▸ Phase 2: 车辆属性特征提取 ◂◂◂
         vehicle_color = "unknown"
         vehicle_type = tracklet.class_name  # Phase 1 默认用 YOLO 类别
+        vehicle_group = VehicleClassifier.group_vehicle_type(vehicle_type)
         plate_number = ""
         plate_hash = ""
         plate_confidence = 0.0
@@ -159,10 +161,11 @@ class BehaviorVectorizer:
             if self.vehicle_classifier is not None:
                 bbox = tracklet.bboxes[-1] if tracklet.bboxes else tracklet.best_crop_bbox
                 vehicle_type = self.vehicle_classifier.classify(tracklet.best_crop, bbox)
-                if tracklet.class_name in ("truck", "bus", "motorcycle"):
+                if tracklet.class_name in ("truck", "bus", "motorcycle", "car"):
                     vehicle_type = self.vehicle_classifier.classify_from_yolo(
                         tracklet.class_name, bbox
                     )
+                vehicle_group = VehicleClassifier.group_vehicle_type(vehicle_type)
 
             # ReID 特征提取
             if self.reid_extractor is not None and self.reid_extractor.enabled:
@@ -200,6 +203,8 @@ class BehaviorVectorizer:
             "track_id": tracklet.track_id,
             "camera_id": tracklet.camera_id,
             "vehicle_type": vehicle_type,
+            "vehicle_group": vehicle_group,
+            "analysis_target": int(vehicle_group == "ordinary"),
             "vehicle_color": vehicle_color,
             "plate_number": plate_number,
             "plate_hash": plate_hash,

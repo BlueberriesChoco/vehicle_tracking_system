@@ -48,7 +48,7 @@
   - 高频通行指数
   - 聚集行为指数
 - 车辆属性提取：
-  - 车型粗分类
+  - 车型粗分类，区分普通车辆和货车
   - 颜色识别
   - 车牌区域检测
   - OCR 接口
@@ -182,7 +182,7 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `global_vehicle_id` | 日聚合后的全局车辆 ID |
 | `segment_count` | 日聚合合并的视频段数 |
 | `camera_id` | 摄像头 ID |
-| `vehicle_type` | 车辆类型 |
+| `vehicle_type` | 车辆类型，如 sedan/suv/mpv/truck/bus |`r`n| `vehicle_group` | 车辆研判分组，如 ordinary/freight/large_passenger |`r`n| `analysis_target` | 是否纳入行政通道异常分析 |
 | `vehicle_color` | 车辆颜色 |
 | `plate_number` | OCR 识别车牌号，可能为空 |
 | `plate_hash` | 车牌哈希 |
@@ -216,6 +216,19 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `is_anomaly` | 是否异常，占位或待接入 |
 | `alert_reason` | 告警原因，占位或待接入 |
 
+## 行政通道分析范围
+
+本项目当前判断对象限定为行政通道普通车辆，货运通道车辆不纳入异常判断。检测阶段仍保留 `truck`、`bus`、`motorcycle` 等类别，用于识别和排除不属于行政通道研判范围的车辆。
+
+车辆类型字段分两层：
+
+| 字段 | 说明 |
+|---|---|
+| `vehicle_type` | 模型或启发式分类结果，如 `sedan`、`suv`、`mpv`、`truck`、`bus` |
+| `vehicle_group` | 研判分组，如 `ordinary`、`freight`、`large_passenger`、`two_wheeler` |
+| `analysis_target` | 是否纳入行政通道异常分析，普通车为 `1`，货车等默认 `0` |
+
+Phase 3 默认只对 `vehicle_group = ordinary` 的车辆训练基线和生成告警。货车记录会保留在向量和事件 CSV 中，便于复核模型是否正确区分，但不会参与行政通道风险判断。
 ## Phase 3 基线和告警
 
 Phase 3 不直接重跑视频检测，而是读取 Phase 1/2 已生成的行为向量 CSV，建立正常行为基线并输出告警 CSV。
@@ -251,7 +264,7 @@ data/outputs/alerts/alerts_<camera_id>.csv
 | 规则告警 | 超速、长时间滞留、路径偏离、夜间频繁停留 |
 | 统计基线 | 使用历史正常行为的均值和标准差计算各字段 Z-score |
 
-规则和统计基线都会尊重可靠性字段。比如 `speed_reliable = 0` 时，不使用速度触发超速告警；`path_reliable = 0` 时，不使用路径偏离触发告警。
+Phase 3 默认只分析 `ordinary` 普通车辆；货车等非行政通道研判对象会保留记录但不参与告警。规则和统计基线都会尊重可靠性字段。比如 `speed_reliable = 0` 时，不使用速度触发超速告警；`path_reliable = 0` 时，不使用路径偏离触发告警。
 ## 摄像头配置等级
 
 系统支持多摄像头渐进接入，不要求所有摄像头一开始都完成精细标定。

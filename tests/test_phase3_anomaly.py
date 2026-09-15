@@ -88,3 +88,27 @@ def test_alert_writer_outputs_only_anomalies_by_default(tmp_path):
     assert len(output) == 1
     assert output[0]["track_id"] == "2"
     assert output[0]["severity"] == "medium"
+
+
+def test_baseline_builder_uses_only_analysis_target_rows():
+    rows = [
+        dict(_row(speed=2.0), vehicle_group="ordinary", analysis_target=1),
+        dict(_row(speed=99.0), vehicle_group="freight", analysis_target=0),
+    ]
+
+    baseline = BaselineBuilder().build(rows, camera_id="cam01")
+
+    assert baseline["sample_count"] == 1
+    assert baseline["target_groups"] == ["ordinary"]
+    assert baseline["stats"]["avg_speed_ms"]["mean"] == 2.0
+
+
+def test_anomaly_detector_ignores_freight_rows_by_default():
+    detector = AnomalyDetector(thresholds={"speed_max_kmh": 10.0, "dwell_max_sec": 120.0})
+    freight = dict(_row(speed=20.0), vehicle_type="truck", vehicle_group="freight", analysis_target=0)
+
+    detected = detector.detect([freight])[0]
+
+    assert detected["analysis_target"] == 0
+    assert detected["is_anomaly"] == 0
+    assert detected["alert_reason"] == ""

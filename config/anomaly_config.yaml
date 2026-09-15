@@ -1,5 +1,8 @@
 # Phase 3 anomaly detection configuration
 
+analysis_scope:
+  target_groups: ["ordinary"]   # 行政通道只分析普通车辆；货车保留记录但不参与告警
+
 baseline:
   min_days: 7
   min_samples: 100

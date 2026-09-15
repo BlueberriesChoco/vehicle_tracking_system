@@ -1,6 +1,6 @@
 import csv
 import os
-from typing import Iterable, List
+from typing import Iterable
 
 
 class AlertWriter:
@@ -17,6 +17,8 @@ class AlertWriter:
         "is_anomaly",
         "alert_reason",
         "vehicle_type",
+        "vehicle_group",
+        "analysis_target",
         "vehicle_color",
         "plate_number",
         "plate_confidence",
@@ -48,6 +50,8 @@ class AlertWriter:
             "is_anomaly": record.get("is_anomaly", 0),
             "alert_reason": record.get("alert_reason", ""),
             "vehicle_type": record.get("vehicle_type", ""),
+            "vehicle_group": record.get("vehicle_group", ""),
+            "analysis_target": record.get("analysis_target", ""),
             "vehicle_color": record.get("vehicle_color", ""),
             "plate_number": record.get("plate_number", ""),
             "plate_confidence": record.get("plate_confidence", ""),
