@@ -88,7 +88,7 @@ class ByteTrackTracker:
                 self.tracklets[tid].mark_lost()
                 self._update_kalman(tid, None)
 
-        # Step 6: 未匹配的高分检测 → 新建轨迹
+        # Step 6: 只有高置信度且未匹配的检测才新建轨迹，减少低分误检生成假轨迹
         for det in unmatched_high:
             self._create_tracklet(det, frame_idx, timestamp)
 
@@ -217,7 +217,7 @@ class ByteTrackTracker:
                 to_remove.append(tid)
 
         for tid in to_remove:
-            # finished 的保留在字典中供后续查询，但不再活跃
+            # finished 保留在字典中，供轨迹提取和视频收尾阶段继续读取
             self.tracklets[tid].state = "finished"
             if tid in self._kalman_states:
                 del self._kalman_states[tid]

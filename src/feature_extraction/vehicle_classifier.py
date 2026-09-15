@@ -15,6 +15,7 @@ class VehicleClassifier:
       special - 特种车辆
     """
 
+    # 无专用分类模型时，使用检测框宽高比做粗分；正式场景应以本地样本微调模型替代。
     ASPECT_RATIO_RANGES = {
         "motorcycle": (0.4, 0.9),
         "car": (0.9, 1.6),
@@ -128,6 +129,7 @@ class VehicleClassifier:
         }
         mapped = yolo_map.get(yolo_class_name, "car")
 
+        # YOLO 已识别为 truck/bus/motorcycle 时直接信任粗类别；只有 car 再细分。
         if mapped == "car" and bbox:
             return self._classify_by_geometry(bbox)
 
@@ -135,6 +137,7 @@ class VehicleClassifier:
 
     @classmethod
     def group_vehicle_type(cls, vehicle_type: str) -> str:
+        """把细粒度车型归并为业务研判分组。"""
         normalized = (vehicle_type or "unknown").strip().lower()
         if normalized in cls.ORDINARY_TYPES:
             return "ordinary"

@@ -25,12 +25,14 @@ class AnomalyDetector:
         results = []
         for vector in vectors:
             record = dict(vector)
+            # 非行政通道研判对象只保留输出，不参与规则告警和统计基线评分。
             is_target = self.baseline_builder.is_analysis_target(record)
             record["analysis_target"] = int(is_target)
             reasons = self.rule_engine.check(record) if is_target else []
             baseline_score = 0.0
             baseline_feature_count = 0
 
+            # 统计基线是 Phase3 的离线筛查能力；没有基线时只运行规则引擎。
             if is_target and self.baseline is not None:
                 baseline_result = self.baseline_builder.score(
                     record,

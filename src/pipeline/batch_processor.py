@@ -41,7 +41,7 @@ class BatchProcessor:
     ):
         self.logger = get_logger(__name__)
 
-        # 加载配置
+        # 加载配置：default.yaml 控制通用参数，camera/*.yaml 覆盖单摄像头 ROI/标定
         self.config = self._load_config(config_path)
         self.camera_config = {}
         if camera_config_path and os.path.exists(camera_config_path):
@@ -98,7 +98,7 @@ class BatchProcessor:
             camera_id=camera_id,
         )
 
-        # 场景几何
+        # 场景几何：决定速度、路径偏离、聚集距离等字段是否可靠
         entry_line = cam_cfg.get("entry_line", {})
         exit_line = cam_cfg.get("exit_line", {})
         calib = cam_cfg.get("calibration", {})
@@ -151,7 +151,7 @@ class BatchProcessor:
         if ref_path_file and os.path.exists(ref_path_file):
             self.path_reference.load(ref_path_file)
 
-        # 行为向量化器
+        # 行为向量化器：在轨迹完成后一次性汇总 Phase1/2 所有字段
         behavior_cfg = cfg.get("behavior", {})
         speed_cfg = behavior_cfg.get("speed", {})
         night_cfg = behavior_cfg.get("night", {})
@@ -199,7 +199,7 @@ class BatchProcessor:
             font_scale=vis_cfg.get("font_scale", 0.5),
         )
 
-        # 输出
+        # 输出：向量 CSV 给特征分析使用，事件 CSV 给后续告警/跨摄像头使用
         output_cfg = cfg.get("output", {})
         self.vector_writer = VectorWriter(
             output_format=output_cfg.get("format", "csv"),
@@ -234,7 +234,7 @@ class BatchProcessor:
         video_name = Path(video_path).stem
         camera_id = self.tracker.camera_id
 
-        # 从视频文件名推断日期和小时
+        # 从视频文件名推断日期和小时，用于稳定生成输出目录和文件名
         date_str, hour_str = self._parse_video_datetime(video_name)
 
         vector_output_dir = os.path.join(
@@ -301,7 +301,7 @@ class BatchProcessor:
         if video_writer is not None:
             video_writer.release()
 
-        # 写出行为向量
+        # 写出行为向量：每条完成轨迹一行，保留详细特征
         all_vectors = self.pipeline.completed_vectors
         csv_filename = f"vec_{camera_id}_{date_str}_{hour_str}.csv"
         csv_path = os.path.join(vector_output_dir, csv_filename)
@@ -311,6 +311,7 @@ class BatchProcessor:
             f"Output: {csv_path} ({len(all_vectors)} vehicle vectors)"
         )
 
+        # 写出通行事件：每条完成轨迹转换为一条 vehicle_passage，供 Phase3/4 复用
         if self.event_output_enabled:
             event_output_dir = os.path.join(output_dir, "events", camera_id, date_str)
             event_filename = f"events_{camera_id}_{date_str}_{hour_str}.csv"

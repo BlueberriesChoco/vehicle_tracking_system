@@ -17,6 +17,7 @@ class FeatureSpec:
     reliability_field: Optional[str] = None
 
 
+# Phase3 只使用可解释的行为字段建基线；带 reliability_field 的字段会自动跳过未标定样本。
 DEFAULT_FEATURES = [
     FeatureSpec("avg_speed_ms", "speed_reliable"),
     FeatureSpec("max_speed_ms", "speed_reliable"),
@@ -69,6 +70,7 @@ class BaselineBuilder:
         return rows
 
     def build(self, vectors: Iterable[dict], camera_id: str = "unknown") -> dict:
+        # 行政通道基线默认只使用普通车辆，避免货车通行模式污染正常范围。
         vectors = self.filter_analysis_targets(vectors)
         stats = {}
         for spec in self.features:
@@ -102,6 +104,7 @@ class BaselineBuilder:
             stat = baseline.get("stats", {}).get(spec.name, {})
             if not stat or stat.get("count", 0) <= 0:
                 continue
+            # 未标定摄像头的速度/路径/聚集字段不参与统计评分。
             if not self._is_reliable(vector, spec):
                 continue
             value = self._to_float(vector.get(spec.name))
@@ -130,6 +133,7 @@ class BaselineBuilder:
         return [vector for vector in vectors if self.is_analysis_target(vector)]
 
     def is_analysis_target(self, vector: dict) -> bool:
+        # 新 CSV 优先使用 analysis_target；兼容旧 CSV 时再退回 vehicle_group。
         explicit = vector.get("analysis_target")
         if explicit is not None and str(explicit).strip() != "":
             return str(explicit).strip().lower() in {"1", "true", "yes"}
@@ -139,6 +143,7 @@ class BaselineBuilder:
     def _valid_values(self, vectors: List[dict], spec: FeatureSpec) -> np.ndarray:
         values = []
         for vector in vectors:
+            # 未标定摄像头的速度/路径/聚集字段不参与统计评分。
             if not self._is_reliable(vector, spec):
                 continue
             value = self._to_float(vector.get(spec.name))

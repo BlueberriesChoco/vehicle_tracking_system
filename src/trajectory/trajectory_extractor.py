@@ -49,7 +49,7 @@ class TrajectoryExtractor:
         exit_configured = self.scene.has_valid_exit_line()
 
         for tid, tracklet in tracklets.items():
-            # ---- 进入判定 ----
+            # ---- 进入判定：有标定线用过线判断，无标定线用最小轨迹长度近似 ----
             if tracklet.is_active and not tracklet.has_entered:
                 entered = False
                 if entry_configured and tracklet.trajectory_length >= 2:
@@ -64,7 +64,7 @@ class TrajectoryExtractor:
                     tracklet.mark_entered(frame_idx)
                     self._entered_tracks[tid] = tracklet
 
-            # ---- 离开判定 ----
+            # ---- 离开判定：有出口线用过线判断，无出口线用轨迹失活判断 ----
             if tracklet.has_entered and not tracklet.has_exited:
                 exited = False
                 if exit_configured and tracklet.trajectory_length >= 2:
@@ -123,6 +123,7 @@ class TrajectoryExtractor:
 
         trajectory_length_m = self.scene.pixel_to_world(trajectory_length_px)
 
+        # enter/exit frame 是全局帧号，必须先定位到轨迹自身的 frame_indices 再取时间戳。
         enter_time = tracklet.first_seen_time
         exit_time = tracklet.last_seen_time
         if tracklet.enter_frame in tracklet.frame_indices:

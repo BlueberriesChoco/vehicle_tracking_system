@@ -172,7 +172,7 @@ class BehaviorVectorizer:
                 reid_emb = self.reid_extractor.extract(tracklet.best_crop)
                 tracklet.reid_embedding = reid_emb
 
-        # 确定 OCR 输入：优先用最大裁剪（车最近时），回退到最佳裁剪
+        # 确定 OCR 输入：优先用最大裁剪（车最近时），只有车牌像素足够时才值得 OCR
         if tracklet.largest_crop is not None:
             lw = tracklet.largest_crop.shape[1]
             if lw >= 250:  # 车辆宽度 >= 250px 时车牌约 80+ px，足够 OCR
@@ -191,7 +191,7 @@ class BehaviorVectorizer:
                     tracklet.plate_number = plate_number
                     tracklet.plate_hash = plate_hash
 
-        # Register frequency after OCR so newly extracted plates are used.
+        # OCR 完成后再登记频次：有车牌用 plate_hash，没有车牌才退回 track_id。
         vehicle_key = tracklet.plate_hash or str(tracklet.track_id)
         self.frequency_extractor.register_vehicle(vehicle_key)
         freq_index = self.frequency_extractor.compute_freq_index(vehicle_key)
@@ -204,6 +204,7 @@ class BehaviorVectorizer:
             "camera_id": tracklet.camera_id,
             "vehicle_type": vehicle_type,
             "vehicle_group": vehicle_group,
+            # Phase3 默认只分析 ordinary 普通车辆；货车会保留记录但不触发行政通道告警。
             "analysis_target": int(vehicle_group == "ordinary"),
             "vehicle_color": vehicle_color,
             "plate_number": plate_number,

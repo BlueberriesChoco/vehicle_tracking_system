@@ -65,13 +65,13 @@ class FramePipeline:
         # Step 2: ROI 过滤
         detections = self.roi_filter.filter_detections(detections)
 
-        # Step 3: 跟踪
+        # Step 3: 跟踪，负责给同一辆车维持稳定 track_id
         self.tracker.update(detections, self._frame_idx, timestamp)
 
         # Step 3.5: 保存每辆车的最佳裁剪（用于 Phase 2 特征提取）
         self._save_best_crops(frame)
 
-        # Step 4: 轨迹进出判定（传所有 tracklet，不活跃的用于 auto-exit 检测）
+        # Step 4: 轨迹完成判定；无进出线时使用“出现→消失”的自动完成逻辑
         all_tracklets = self.tracker.get_all_tracklets()
         position_histories = self._get_position_histories(all_tracklets)
         newly_exited = self.trajectory_extractor.process_frame(
@@ -79,7 +79,7 @@ class FramePipeline:
             self._frame_idx,
         )
 
-        # Step 5: 对刚完成穿越的轨迹构建行为向量
+        # Step 5: 只对本帧刚完成的轨迹构建行为向量，避免重复输出
         new_vectors = []
         active_tracklets = self.tracker.get_active_tracklets()
         all_positions = self._get_active_positions(active_tracklets)
@@ -134,6 +134,7 @@ class FramePipeline:
         all_positions = self._get_all_last_positions(all_tracklets)
         position_histories = self._get_position_histories(all_tracklets)
 
+        # 视频结束时，仍在画面内但已经满足进入条件的轨迹也要收尾输出
         for tracklet in all_tracklets:
             if tracklet.is_complete or tracklet.has_entered:
                 already_done = any(
