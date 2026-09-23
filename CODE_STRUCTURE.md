@@ -172,6 +172,16 @@
 | `src/utils/time_utils.py` | 时间工具，处理夜间判断、时间重叠、帧号转时间、小时桶等。 |
 | `src/utils/__init__.py` | utils 包导出文件。 |
 
+## `web/map_editor/` 园区地图编辑器
+
+| 文件 | 作用 |
+|---|---|
+| `web/map_editor/index.html` | 可直接打开的地图编辑器页面，包含工具栏、地图画布和属性面板。 |
+| `web/map_editor/styles.css` | 地图编辑器布局、图层和地图对象样式。 |
+| `web/map_editor/app.js` | 企业、道路、摄像头编辑，本地保存、撤销重做及 JSON/PNG 导入导出逻辑。 |
+| `web/map_editor/assets/zone-a-base-map.jpg` | 采用 ASCII 文件名保存的综保区 A 区围网底图。 |
+| `web/map_editor/README.md` | 地图编辑器使用与坐标系说明。 |
+
 ## `tests/` 测试目录
 
 | 文件 | 作用 |

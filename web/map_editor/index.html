@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>综保区地图编辑器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div>
+        <h1>综保区地图编辑器</h1>
+        <p id="save-state">本地草稿已就绪</p>
+      </div>
+      <div class="header-actions">
+        <button id="undo-button" type="button" title="撤销上一步">撤销</button>
+        <button id="redo-button" type="button" title="重做上一步">重做</button>
+        <button id="export-json-button" type="button">导出 JSON</button>
+        <label class="button-like" for="import-json-input">导入 JSON</label>
+        <input id="import-json-input" type="file" accept="application/json,.json" hidden>
+        <button id="export-png-button" class="primary" type="button">导出 PNG</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="tool-panel" aria-label="绘图工具">
+        <button class="tool-button active" data-tool="select" type="button" title="选择并拖动对象">
+          <span class="tool-symbol">↖</span><span>选择</span>
+        </button>
+        <button class="tool-button" data-tool="enterprise" type="button" title="在地图上添加企业区域">
+          <span class="tool-symbol">▣</span><span>企业</span>
+        </button>
+        <button class="tool-button" data-tool="road" type="button" title="连续点击绘制道路，双击结束">
+          <span class="tool-symbol">⌁</span><span>道路</span>
+        </button>
+        <button class="tool-button" data-tool="camera" type="button" title="在地图上添加摄像头">
+          <span class="tool-symbol">●</span><span>摄像头</span>
+        </button>
+        <hr>
+        <label class="layer-toggle"><input id="enterprise-layer" type="checkbox" checked> 企业层</label>
+        <label class="layer-toggle"><input id="road-layer" type="checkbox" checked> 道路层</label>
+        <label class="layer-toggle"><input id="camera-layer" type="checkbox" checked> 摄像头层</label>
+        <hr>
+        <button id="zoom-in-button" type="button" title="放大地图">放大</button>
+        <button id="zoom-out-button" type="button" title="缩小地图">缩小</button>
+        <button id="zoom-reset-button" type="button" title="恢复地图大小">适应</button>
+      </aside>
+
+      <section class="map-panel" aria-label="可编辑地图">
+        <div id="map-viewport" class="map-viewport">
+          <div id="map-stage" class="map-stage">
+            <img id="base-map" src="assets/zone-a-base-map.jpg" alt="南通综保区 A 区围网底图">
+            <svg id="map-overlay" aria-label="地图标注层"></svg>
+            <div id="camera-tooltip" class="camera-tooltip" hidden></div>
+          </div>
+        </div>
+        <div class="map-status">
+          <span id="pointer-position">X: --, Y: --</span>
+          <span id="tool-hint">选择对象后可在右侧修改信息</span>
+        </div>
+      </section>
+
+      <aside class="inspector-panel">
+        <div class="inspector-heading">
+          <h2>属性</h2>
+          <button id="delete-button" class="danger" type="button" disabled>删除</button>
+        </div>
+        <div id="empty-inspector" class="empty-state">选择地图对象</div>
+        <form id="item-form" hidden></form>
+        <hr>
+        <section class="layer-list-section">
+          <div class="inspector-heading">
+            <h2>对象</h2>
+            <button id="reset-button" type="button">恢复初始</button>
+          </div>
+          <div id="item-list" class="item-list"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
