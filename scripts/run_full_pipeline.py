@@ -25,6 +25,7 @@ import glob
 import json
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -141,9 +142,20 @@ def main():
     if args.device != 0:
         processor.detector.device = args.device
 
-    for video in videos:
-        source = ensure_h264(video)
-        processor.process_video(video_path=source, output_dir=outputs)
+    # 同一小时的多段录像会写到同一个 vec_/events_ 文件名，后一段覆盖前一段；
+    # 先按 (日期, 小时) 分组，重复的才加序号后缀，单段时文件名保持不变。
+    sources = [ensure_h264(video) for video in videos]
+    hour_keys = [processor._parse_video_datetime(Path(source).stem) for source in sources]
+    hour_counts = {}
+    for key in hour_keys:
+        hour_counts[key] = hour_counts.get(key, 0) + 1
+    seen = {}
+    for source, key in zip(sources, hour_keys):
+        suffix = ""
+        if hour_counts[key] > 1:
+            seen[key] = seen.get(key, 0) + 1
+            suffix = f"{seen[key]:02d}"
+        processor.process_video(video_path=source, output_dir=outputs, name_suffix=suffix)
 
     camera_vector_dir = os.path.join(outputs, "vectors", args.camera)
     rows = load_vectors(camera_vector_dir)
@@ -169,11 +181,19 @@ def main():
     use_traj = False
     if can_train:
         if args.retrain or not os.path.exists(iforest_path):
-            IsolationForestDetector(contamination=contamination).fit(target_rows).save(iforest_path)
+            try:
+                IsolationForestDetector(contamination=contamination).fit(target_rows).save(iforest_path)
+            except Exception as exc:  # 训练失败不应让整条链路崩掉
+                logger.warning("Isolation Forest training failed (%s); falling back to rules", exc)
         if args.retrain or not os.path.exists(traj_prefix + ".pt"):
-            TrajectoryPredictionDetector(
-                past_len=5, future_len=5, epochs=30, contamination=contamination
-            ).fit(target_rows).save(traj_prefix)
+            # 轨迹窗口需要 past_len + future_len 个点；只有 3 条短轨迹时
+            # fit() 会抛 ValueError，必须捕获后回退到规则引擎
+            try:
+                TrajectoryPredictionDetector(
+                    past_len=5, future_len=5, epochs=30, contamination=contamination
+                ).fit(target_rows).save(traj_prefix)
+            except Exception as exc:
+                logger.warning("Transformer training failed (%s); falling back to rules", exc)
         use_iforest = os.path.exists(iforest_path)
         use_traj = os.path.exists(traj_prefix + ".pt")
 

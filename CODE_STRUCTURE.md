@@ -191,7 +191,7 @@
 | `src/graph/payload.py` | 图谱载荷组装（节点/社区/边），脚本共用唯一实现。 |
 | `src/graph/community.py` | 纯 NumPy Louvain 社区发现，附模块度和社区摘要。 |
 | `src/graph/anomaly.py` | 图异常指数 G。邻接矩阵低秩 SVD 重构残差（线性图自编码器基线），输出度与聚类系数。 |
-| `src/graph/gae.py` | 图自编码器 GAE（两层 GCN + 内积解码器，边掩码训练），可选 `--method gae`。 |
+| `src/graph/gae.py` | 图自编码器 GAE。**特征驱动 GCN**（4 维结构特征 + 归一化邻接传播，参数与节点数无关），边掩码 + 负采样训练；支持基线图训练、目标图评分。可选 `--method gae`。 |
 | `src/graph/__init__.py` | graph 包导出文件。 |
 
 ## `src/risk/` 风险融合与报告模块（研究要点四）

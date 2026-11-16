@@ -69,8 +69,9 @@ def collect_metrics(root: str, benchmark_path: str = "") -> dict:
     )
 
     anomaly_rows = [row for row in alerts if _flag(row, "is_anomaly")]
-    # alerts.csv 可能只有表头（0 告警），此时用向量数作分母
-    denominator = len(alerts) or len(vectors)
+    # 分母必须始终是“车辆总数”。run_anomaly_detection 默认 anomaly_only=True，
+    # 此时 alerts.csv 只有告警行，用它作分母会把告警率算成 100%。
+    denominator = len(vectors) or len(alerts)
     reasons = {}
     for row in anomaly_rows:
         for part in str(row.get("alert_reason", "") or "").split(";"):

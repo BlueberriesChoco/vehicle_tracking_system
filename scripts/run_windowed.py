@@ -47,6 +47,18 @@ def find_vectors(window_dir, camera):
     return matches[0] if matches else None
 
 
+def count_vector_rows(csv_path):
+    """统计向量 CSV 的数据行数（不含表头）。
+
+    窗口没有车时 VectorWriter 仍会写出只有表头的 CSV，所以“文件存在”
+    不等于“有样本”，训练前必须看行数。
+    """
+    if not csv_path or not os.path.exists(csv_path):
+        return 0
+    with open(csv_path, encoding="utf-8") as handle:
+        return max(0, sum(1 for _ in handle) - 1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Windowed processing for bounded latency")
     parser.add_argument("--video", required=True)
@@ -96,30 +108,49 @@ def main():
 
         processor.process_video(args.video, window_dir, start_frame=start)
         vector_csv = find_vectors(window_dir, args.camera)
-        if not vector_csv:
-            logger.warning("Window %s produced no vectors", window_index)
+        row_count = count_vector_rows(vector_csv)
+        if row_count == 0:
+            logger.warning("Window %s produced no vehicles; skipping", window_index)
             results.append({"window": window_index, "start_frame": start, "vehicles": 0})
             window_index += 1
             continue
 
-        # 首次窗口顺带训练模型，后续窗口复用
+        # 首次窗口顺带训练模型，后续窗口复用。
+        # 只有 1–2 辆车时样本不足，训练会失败——此时不训练，本窗及后续窗口
+        # 只用规则引擎与统计基线，而不是让整段录像崩掉。
         if window_index == 0:
-            run_command([python, "scripts/train_iforest.py", "--input", vector_csv, "--output", iforest_path])
-            run_command([
-                python, "scripts/train_transformer.py", "--input", vector_csv,
-                "--output", traj_prefix, "--epochs", "20", "--device", "cpu",
-            ])
+            if row_count >= 3:
+                try:
+                    run_command([python, "scripts/train_iforest.py", "--input", vector_csv, "--output", iforest_path])
+                except RuntimeError as exc:
+                    logger.warning("Isolation Forest 训练失败（%s），本段仅用规则检测", exc)
+                if os.path.exists(iforest_path):
+                    try:
+                        run_command([
+                            python, "scripts/train_transformer.py", "--input", vector_csv,
+                            "--output", traj_prefix, "--epochs", "20", "--device", "cpu",
+                        ])
+                    except RuntimeError as exc:
+                        logger.warning("Transformer 训练失败（%s），仅用 IF 与规则", exc)
+            else:
+                logger.warning(
+                    "First window has only %s vehicles; skipping model training (rule engine only)",
+                    row_count,
+                )
 
         alerts_dir = os.path.join(window_dir, "alerts")
         os.makedirs(alerts_dir, exist_ok=True)
-        run_command([
+        detection_cmd = [
             python, "scripts/run_anomaly_detection.py",
             "--input", vector_csv,
-            "--iforest", iforest_path,
-            "--trajectory-model", traj_prefix,
             "--output", os.path.join(alerts_dir, "alerts.csv"),
             "--annotated-vectors", os.path.join(alerts_dir, "vectors.csv"),
-        ])
+        ]
+        if os.path.exists(iforest_path):
+            detection_cmd += ["--iforest", iforest_path]
+        if os.path.exists(traj_prefix + ".pt"):
+            detection_cmd += ["--trajectory-model", traj_prefix]
+        run_command(detection_cmd)
         graph_path = os.path.join(window_dir, "graph.json")
         run_command([python, "scripts/build_graph.py", "--input", os.path.join(alerts_dir, "vectors.csv"),
                      "--output", graph_path, "--top-k", "3"])

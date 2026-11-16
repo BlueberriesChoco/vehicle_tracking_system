@@ -34,7 +34,7 @@
 | # | 指标 | 状态 | 验证方式 | 产物 / 命令 |
 |---|---|---|---|---|
 | 10 | 边准确率≥85% | 🔴 | "真实交互关系"无客观定义 | `$ROOT/graphs/graph_*.json`（`edge_count`） |
-| 11 | GAE 重构误差识别异常节点≥85% | 🟡 | 合成双团图可排到前 10% | `tests/test_gae.py`；`python scripts/build_graph.py --method gae` |
+| 11 | GAE 重构误差识别异常节点≥85% | 🟡 | 结构注入 AUC：度越界型 **0.963±0.045**（达标）；保度重连型 0.584（未达标） | `python scripts/eval_gae_transfer.py --vectors data/outputs/e2e/alerts/vectors_admin_in.csv --seeds 5` → `data/outputs/eval/gae_transfer.json`；`tests/test_gae.py` |
 | 12 | 团伙检测准确率≥80% | 🔴 | 无团伙 ground truth | `$ROOT/graphs/graph_*.json`（`communities`） |
 | 13 | 社区发现检出≥75% | 🟡 | Louvain 可用，缺已知团伙 | `python scripts/report_metrics.py` → **105 社区 / Q=0.7348** |
 

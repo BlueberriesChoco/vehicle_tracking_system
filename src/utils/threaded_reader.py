@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 from typing import Optional, Tuple
@@ -34,11 +35,21 @@ class ThreadedFrameReader:
         index = 0
         while not self._stop.is_set():
             ok, frame = self._capture.read()
-            try:
-                self._queue.put((ok, frame, index), timeout=0.5)
-            except queue.Full:
-                # 队列满且主线程还没消费，说明消费端是瓶颈，直接退出
-                break
+
+            # 队列满表示消费端是瓶颈，只能阻塞等待，绝不能丢帧：
+            # 旧实现在 0.5 秒超时后直接 break，会把剩余视频静默截断，
+            # 而上层只看到 (False, None)，误当成“视频结束”。
+            delivered = False
+            while not self._stop.is_set():
+                try:
+                    self._queue.put((ok, frame, index), timeout=0.2)
+                    delivered = True
+                    break
+                except queue.Full:
+                    continue
+            if not delivered:  # 已被 stop() 中断
+                return
+
             index += 1
             if not ok:
                 break
@@ -48,6 +59,13 @@ class ThreadedFrameReader:
         try:
             ok, frame, _ = self._queue.get(timeout=30.0)
         except queue.Empty:
+            # 超时又发生在解码线程仍存活时，说明不是“读完”，而是真的卡住了；
+            # 至少留下日志，避免静默当作视频结束。
+            if self._thread.is_alive() and not self._stop.is_set():
+                logging.getLogger(__name__).warning(
+                    "Frame prefetch timed out after 30s while the decode thread is still alive; "
+                    "treating as end-of-stream (frames may be incomplete)"
+                )
             return False, None
         return ok, frame
 

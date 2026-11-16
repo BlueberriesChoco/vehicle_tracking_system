@@ -114,13 +114,10 @@ class TrajectoryExtractor:
         """构建轨迹摘要字典。"""
         xs_smooth, ys_smooth = self.get_smoothed_trajectory(tracklet)
 
-        trajectory_length_px = 0.0
-        for i in range(1, len(xs_smooth)):
-            dx = xs_smooth[i] - xs_smooth[i - 1]
-            dy = ys_smooth[i] - ys_smooth[i - 1]
-            trajectory_length_px += np.sqrt(dx * dx + dy * dy)
-
-        trajectory_length_m = self.scene.pixel_to_world(trajectory_length_px)
+        # 用逐点地面距离累加，才能吃到 scene 的单应矩阵；
+        # pixel_to_world 只按常数 px_per_meter 换算，标定后仍然会算错。
+        centers = [(float(xs_smooth[i]), float(ys_smooth[i])) for i in range(len(xs_smooth))]
+        trajectory_length_m = self.scene.trajectory_length_meters(centers)
 
         # enter/exit frame 是全局帧号，必须先定位到轨迹自身的 frame_indices 再取时间戳。
         enter_time = tracklet.first_seen_time

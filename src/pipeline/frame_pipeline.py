@@ -50,11 +50,16 @@ class FramePipeline:
         self,
         frames: List[np.ndarray],
         timestamps: Optional[List[datetime]] = None,
+        on_frame=None,
     ) -> List[Tuple[np.ndarray, List[dict]]]:
         """批量检测 + 逐帧跟踪/向量化。
 
         批处理只合并“检测”这一步（把多帧送进同一次 YOLO 前向），
         跟踪、轨迹完成判定和行为向量化仍按帧顺序执行，保证时序正确。
+
+        ``on_frame(frame, active_tracklets)`` 会在每帧处理完时回调，
+        供标注视频使用——必须在“当时”取轨迹快照，批处理结束后再取会拿到
+        整批的最终状态。
         """
         if not frames:
             return []
@@ -63,7 +68,9 @@ class FramePipeline:
         outputs = []
         for index, frame in enumerate(frames):
             timestamp = timestamps[index] if timestamps is not None and index < len(timestamps) else None
-            outputs.append(self._process_with_detections(frame, detections_batch[index], timestamp))
+            outputs.append(
+                self._process_with_detections(frame, detections_batch[index], timestamp, on_frame)
+            )
         return outputs
 
     def _process_with_detections(
@@ -71,6 +78,7 @@ class FramePipeline:
         frame: np.ndarray,
         detections: List[dict],
         timestamp: Optional[datetime] = None,
+        on_frame=None,
     ) -> Tuple[np.ndarray, List[dict]]:
         if self._start_time is None:
             # 固定占位时间：用 datetime.now() 会让结果随运行时刻变化，不可复现
@@ -109,6 +117,9 @@ class FramePipeline:
 
         self._completed_vectors.extend(new_vectors)
         self._frame_idx += 1
+
+        if on_frame is not None:
+            on_frame(frame, active_tracklets)
 
         return frame, new_vectors
 

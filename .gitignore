@@ -14,9 +14,15 @@ __pycache__/
 data/validation/
 data/outputs/
 data/references/
+tmp/
+
+# Agent workspace data
+.workbuddy/
 
 # Model build artifacts
 *.onnx
 yolov8n.pt
 models/*.pth
 models/*.pt
+# Office 打开文件时产生的锁文件
+~\$*

@@ -8,6 +8,7 @@
 
 - **一页纸交付说明**：[`START_HERE.md`](START_HERE.md)（先看这个）
 - **目标完成情况**：[`GOAL_STATUS.md`](GOAL_STATUS.md)（哪些达标、为什么没达标、需要你做什么）
+- **代码审查整改报告**：[`AUDIT_REPORT.md`](AUDIT_REPORT.md)（8 条缺陷的整改与回归测试）
 - 交付总览：[`DELIVERY.md`](DELIVERY.md)
 - 技术指标自评：[`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)
 - 指标验证路径对照：[`METRICS_TRACEABILITY.md`](METRICS_TRACEABILITY.md)
@@ -139,34 +140,69 @@ flowchart TB
 
 ```text
 vehicle_tracking_system/
-├── CHANGELOG.md                   # 中文项目变更日志
-├── README.md                      # 项目说明和使用说明
-├── requirements.txt               # Python 依赖
+├── README.md / CHANGELOG.md / CODE_STRUCTURE.md    # 使用说明、变更日志、按目录的代码结构
+├── ACCEPTANCE_REPORT.md / METRICS_TRACEABILITY.md  # 指标验收结论、逐项复现路径
+├── AUDIT_REPORT.md / GOAL_STATUS.md                # 代码审查整改、目标达成状态
+├── DELIVERY.md / OPERATIONS.md / PERFORMANCE.md    # 交付清单、运维、性能基准
+├── FEASIBILITY_REPORT.md / DATA_REQUIREMENTS.md    # 可行性、数据需求
+├── BENEFITS.md / ANOMALY_SIGNATURES.md / START_HERE.md
+├── Dockerfile / docker-compose.yml                 # 容器化部署
+├── requirements.txt                                # Python 依赖
+├── config.yaml                                     # 根级运行配置
 ├── config/
-│   ├── default.yaml               # 全局默认配置
-│   ├── model_config.yaml          # 车辆属性模型配置
-│   ├── behavior_config.yaml       # 行为特征配置
-│   └── camera/                    # 单摄像头 ROI、进出线、标定配置
-├── scripts/
-│   ├── run_pipeline.py            # 单视频处理入口
-│   ├── run_batch.py               # 批量处理入口
-│   ├── calibrate_camera.py        # 摄像头标定工具
-│   └── build_baseline.py          # 正常行为基线构建脚本
+│   ├── default.yaml / model_config.yaml            # 全局默认配置、车辆属性模型配置
+│   ├── behavior_config.yaml / anomaly_config.yaml  # 行为特征配置、异常检测与规则阈值
+│   ├── camera/                                     # 单摄像头 ROI、进出线、标定配置
+│   ├── site/                                       # 区域拓扑与机位关系
+│   ├── calibration_measurements.csv                # 现场实测标定记录
+│   └── label_template.csv                          # 人工标注模板
+├── scripts/                                        # 命令行入口与工具脚本，按用途分组：
+│   ├── 流水线      run_pipeline / run_batch / run_batch_day / run_full_pipeline
+│   │               run_windowed / run_multi_camera / run_anomaly_detection
+│   ├── 训练与标定  train_iforest / train_transformer / build_baseline
+│   │               calibrate_camera / calibrate_homography / calibrate_alert_rate
+│   ├── 图谱与风险  build_graph / build_risk_report / export_gang_case
+│   ├── 评测与验证  eval_system / eval_with_labels / eval_temporal_holdout
+│   │               eval_reid_pairs / eval_gae_transfer / synthetic_anomaly_eval
+│   │               smoke_test / soak_test / delivery_check / report_metrics
+│   ├── 性能基准    benchmark_throughput / benchmark_batch / benchmark_multiprocess
+│   ├── 数据与工具  extract_mbf / stitch_cameras / audit_vector_columns / audit_rules
+│   │               render_camera_config / make_calibration_figure / build_demo_pack
+│   └── 文档与演示  build_agent_experience_doc / merge_docx / insert_docx_paras
+│                   replace_docx_paras / check_docx / demo_alert_budget_bug
 ├── src/
-│   ├── detection/                 # YOLO 检测和 ROI 过滤
-│   ├── tracking/                  # 简化 ByteTrack 跟踪
-│   ├── trajectory/                # 场景几何、轨迹提取和平滑
-│   ├── behavior/                  # 行为向量特征
-│   ├── feature_extraction/        # 颜色、车型、车牌、OCR、ReID
-│   ├── anomaly/                   # 异常检测骨架
-│   ├── pipeline/                  # 视频处理、日聚合
-│   ├── output/                    # CSV/JSON 输出
-│   ├── visualization/             # 可视化绘制
-│   └── utils/                     # 工具模块
-├── tests/                         # 回归测试
-├── data/                          # 测试帧和输出目录
-└── models/                        # YOLO 权重
+│   ├── detection/           # YOLO 检测与 ROI 过滤
+│   ├── tracking/            # ByteTrack 跟踪、tracklet 管理
+│   ├── trajectory/          # 场景几何、单应矩阵、轨迹提取/平滑/拼接
+│   ├── behavior/            # 8 维行为特征与行为向量化
+│   ├── feature_extraction/  # 颜色、车型、车牌、OCR、ReID
+│   ├── anomaly/             # Isolation Forest、Transformer 残差、规则引擎、告警预算
+│   ├── graph/               # 车辆关系图谱、社区发现、GAE 图异常指数
+│   ├── risk/                # 风险融合、证据链、报告生成
+│   ├── report/              # 指标汇总
+│   ├── site/                # 区域拓扑、机位关系与场景语义
+│   ├── pipeline/            # 视频处理、批处理、日聚合
+│   ├── output/              # 向量、事件、告警 CSV/JSON 输出
+│   ├── visualization/       # 可视化绘制与标注视频
+│   └── utils/               # 线程预取读帧、MBF 抽取、日志等
+├── tests/                   # 回归测试：39 个文件、270 条用例
+├── web/
+│   └── map_editor/          # 园区地图编辑器（纯前端，直接打开 index.html）
+├── docs/                    # 标定指南与配图
+├── demo/                    # 演示样例（团伙案例、风险报告）
+├── deploy/                  # 部署说明
+├── models/                  # YOLO 权重与训练产物
+├── data/
+│   ├── videos/              # 现场 MBF 录像
+│   ├── test_videos/         # 测试片段
+│   ├── outputs/             # 各阶段产物（向量、事件、告警、评测结果）
+│   ├── references/          # 基线与模型 JSON
+│   └── validation/          # 人工标注与校验结果
+└── tmp/                     # 临时产物，不提交
 ```
+
+运行产物（`data/outputs/`、`data/references/`、`data/validation/`）不进版本库，
+复现需要先跑对应阶段的脚本。
 
 ## 环境准备
 

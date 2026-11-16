@@ -33,12 +33,19 @@ def apply_alert_budget(
     total = len(rows)
     budget = max(0, int(round(total * target_rate)))
 
+    # 关键：预算只能“裁撤”，不能“提拔”。
+    # 旧实现从 range(total) 里取分数最高的补足预算，当实际告警数少于预算时
+    # 会把普通车写成 is_anomaly=1（且 anomaly_score=0、无 alert_reason），
+    # 等于凭空制造无证据告警。这里只在原本就是告警的行里挑。
+    alert_indices = [
+        index for index, row in enumerate(rows) if _flag(row.get("is_anomaly", 0))
+    ]
     rule_indices = [
-        index for index, row in enumerate(rows)
-        if str(row.get(reason_field, "") or "").strip()
+        index for index in alert_indices
+        if str(rows[index].get(reason_field, "") or "").strip()
     ]
     scored_indices = sorted(
-        range(total),
+        alert_indices,
         key=lambda index: float(rows[index].get(score_field, 0) or 0),
         reverse=True,
     )

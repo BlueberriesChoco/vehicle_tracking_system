@@ -29,6 +29,23 @@ from ..utils.logger import get_logger
 from .frame_pipeline import FramePipeline
 
 
+def _segment_suffix(name_suffix: str) -> str:
+    return f"_{name_suffix}" if name_suffix else ""
+
+
+def build_vector_filename(camera_id: str, date_str: str, hour_str: str, name_suffix: str = "") -> str:
+    """向量 CSV 文件名。
+
+    同一小时可能有多段录像，``name_suffix`` 用于区分，否则后一段会覆盖前一段。
+    """
+    return f"vec_{camera_id}_{date_str}_{hour_str}{_segment_suffix(name_suffix)}.csv"
+
+
+def build_event_filename(camera_id: str, date_str: str, hour_str: str, name_suffix: str = "") -> str:
+    """通行事件 CSV 文件名，后缀规则与向量 CSV 一致。"""
+    return f"events_{camera_id}_{date_str}_{hour_str}{_segment_suffix(name_suffix)}.csv"
+
+
 class BatchProcessor:
     """批量视频处理器。
 
@@ -224,11 +241,15 @@ class BatchProcessor:
         """处理缓冲区中的一批帧并清空。"""
         if not frames:
             return
-        outputs = self.pipeline.process_frames(frames, timestamps)
-        if video_writer is not None:
-            for annotated_frame, _ in outputs:
-                active_tracklets = self.tracker.get_active_tracklets()
-                video_writer.write(self.visualizer.draw_frame(annotated_frame, active_tracklets))
+
+        # 标注视频必须在“每帧当时”取轨迹快照：批处理结束后再调
+        # get_active_tracklets() 拿到的是整批的最终状态，会把最后一帧的框
+        # 画到前 15 帧上，甚至画出本批稍后才创建的轨迹。
+        def _on_frame(frame, active_tracklets):
+            if video_writer is not None:
+                video_writer.write(self.visualizer.draw_frame(frame, active_tracklets))
+
+        self.pipeline.process_frames(frames, timestamps, on_frame=_on_frame if video_writer is not None else None)
         frames.clear()
         timestamps.clear()
 
@@ -238,6 +259,7 @@ class BatchProcessor:
         output_dir: str = "data/outputs",
         output_video_path: Optional[str] = None,
         start_frame: int = 0,
+        name_suffix: str = "",
     ) -> str:
         """处理一段视频文件并输出行为向量。
 
@@ -246,6 +268,8 @@ class BatchProcessor:
             output_dir: 输出目录
             output_video_path: 标注视频输出路径（可选）
             start_frame: 起始帧（用于分窗处理长视频）
+            name_suffix: 追加到输出文件名后缀，用于区分同一小时的多段录像
+                （否则后一段会覆盖前一段的向量与事件 CSV）
 
         Returns:
             输出的行为向量 CSV 文件路径
@@ -364,7 +388,7 @@ class BatchProcessor:
                 vector["is_night"] = 0
                 vector["night_ratio"] = 0.0
 
-        csv_filename = f"vec_{camera_id}_{date_str}_{hour_str}.csv"
+        csv_filename = build_vector_filename(camera_id, date_str, hour_str, name_suffix)
         csv_path = os.path.join(vector_output_dir, csv_filename)
 
         self.vector_writer.write(all_vectors, csv_path)
@@ -375,7 +399,7 @@ class BatchProcessor:
         # 写出通行事件：每条完成轨迹转换为一条 vehicle_passage，供 Phase3/4 复用
         if self.event_output_enabled:
             event_output_dir = os.path.join(output_dir, "events", camera_id, date_str)
-            event_filename = f"events_{camera_id}_{date_str}_{hour_str}.csv"
+            event_filename = build_event_filename(camera_id, date_str, hour_str, name_suffix)
             event_path = os.path.join(event_output_dir, event_filename)
             self.event_writer.write(all_vectors, event_path)
             self.logger.info(
