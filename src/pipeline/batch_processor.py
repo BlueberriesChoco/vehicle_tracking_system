@@ -1,7 +1,8 @@
 import os
 import cv2
+import numpy as np
 import yaml
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from ..output.vector_writer import VectorWriter
 from ..output.event_writer import EventWriter
 from ..visualization.draw import Visualizer
 from ..utils.frame_reader import FrameReader
+from ..utils.threaded_reader import ThreadedFrameReader
 from ..utils.logger import get_logger
 
 from .frame_pipeline import FramePipeline
@@ -108,12 +110,14 @@ class BatchProcessor:
             if ref_px > 0:
                 px_per_meter = ref_px / calib["ref_length_m"]
 
+        homography = self._parse_homography(calib)
         geometry_level = self._infer_geometry_level(
             has_configured_roi=has_configured_roi,
             entry_line=entry_line,
             exit_line=exit_line,
             px_per_meter=px_per_meter,
             calibration=calib,
+            has_homography=homography is not None,
         )
 
         self.scene_geometry = SceneGeometry(
@@ -128,6 +132,7 @@ class BatchProcessor:
             px_per_meter=px_per_meter,
             geometry_level=geometry_level,
             has_roi=has_configured_roi,
+            homography=homography,
         )
 
         # 轨迹平滑器
@@ -210,12 +215,29 @@ class BatchProcessor:
         self.frame_skip = pipeline_cfg.get("frame_skip", 1)
         self.max_frames = pipeline_cfg.get("max_frames", 0)
         self.output_video_enabled = pipeline_cfg.get("output_video", False)
+        # 批处理推理：把多帧合并成一次 YOLO 前向，摊薄每帧 Python 开销
+        self.batch_size = max(1, int(pipeline_cfg.get("batch_size", 1)))
+        # 解码预取：>0 时用独立线程解码，与推理重叠（见 PERFORMANCE.md P1）
+        self.prefetch_frames = max(0, int(pipeline_cfg.get("prefetch_frames", 0)))
+
+    def _flush_batch(self, frames, timestamps, video_writer=None):
+        """处理缓冲区中的一批帧并清空。"""
+        if not frames:
+            return
+        outputs = self.pipeline.process_frames(frames, timestamps)
+        if video_writer is not None:
+            for annotated_frame, _ in outputs:
+                active_tracklets = self.tracker.get_active_tracklets()
+                video_writer.write(self.visualizer.draw_frame(annotated_frame, active_tracklets))
+        frames.clear()
+        timestamps.clear()
 
     def process_video(
         self,
         video_path: str,
         output_dir: str = "data/outputs",
         output_video_path: Optional[str] = None,
+        start_frame: int = 0,
     ) -> str:
         """处理一段视频文件并输出行为向量。
 
@@ -223,6 +245,7 @@ class BatchProcessor:
             video_path: 输入视频路径
             output_dir: 输出目录
             output_video_path: 标注视频输出路径（可选）
+            start_frame: 起始帧（用于分窗处理长视频）
 
         Returns:
             输出的行为向量 CSV 文件路径
@@ -246,8 +269,24 @@ class BatchProcessor:
         cap = FrameReader.open(video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         source_fps = cap.get(cv2.CAP_PROP_FPS) or self.frame_rate
-        video_start_time = self._parse_video_start_time(video_name) or datetime.now()
+        parsed_start = self._parse_video_start_time(video_name)
+        time_known = parsed_start is not None
+        if not time_known:
+            # 不能用 datetime.now()：否则同一段录像在白天/晚上跑会得到不同的夜间判定，
+            # 结果不可复现。改用固定占位时间，并把 time_known 置 0（禁用夜间相关判断）。
+            parsed_start = datetime(2000, 1, 1, 12, 0, 0)
+            self.logger.warning(
+                "文件名未包含时间戳（%s），使用占位时间 %s；夜间相关判断已禁用",
+                video_name,
+                parsed_start.isoformat(),
+            )
+        video_start_time = parsed_start
         self.logger.info(f"Total frames: {total_frames}")
+
+        # 分窗处理：从指定帧开始
+        if start_frame > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_frame))
+            self.logger.info(f"Seek to frame {start_frame}")
 
         # 视频写入器
         video_writer = None
@@ -259,8 +298,16 @@ class BatchProcessor:
 
         # 逐帧处理
         frame_count = 0
+        batch_frames = []
+        batch_timestamps = []
+        batch_size = self.batch_size
+        # 解码预取：独立线程解码，与推理重叠；不改变帧顺序与时间戳
+        reader = None
+        if self.prefetch_frames > 0:
+            reader = ThreadedFrameReader(cap, queue_size=self.prefetch_frames)
+            self.logger.info(f"Decode prefetch enabled (queue={self.prefetch_frames})")
         while True:
-            ret, frame = cap.read()
+            ret, frame = reader.read() if reader is not None else cap.read()
             if not ret:
                 break
 
@@ -276,15 +323,12 @@ class BatchProcessor:
 
             # 处理帧
             timestamp = video_start_time + timedelta(
-                seconds=(frame_count - 1) / source_fps
+                seconds=(start_frame + frame_count - 1) / source_fps
             )
-            annotated_frame, new_vectors = self.pipeline.process_frame(frame, timestamp)
-
-            # 写标注视频
-            if video_writer is not None:
-                active_tracklets = self.tracker.get_active_tracklets()
-                vis_frame = self.visualizer.draw_frame(annotated_frame, active_tracklets)
-                video_writer.write(vis_frame)
+            batch_frames.append(frame)
+            batch_timestamps.append(timestamp)
+            if len(batch_frames) >= batch_size:
+                self._flush_batch(batch_frames, batch_timestamps, video_writer)
 
             # 进度
             if frame_count % 100 == 0:
@@ -293,16 +337,33 @@ class BatchProcessor:
                     f"completed vectors: {len(self.pipeline.completed_vectors)}"
                 )
 
+        # 收尾前先把最后一批处理完
+        self._flush_batch(batch_frames, batch_timestamps, video_writer)
+
         # 收尾
         remaining = self.pipeline.finalize()
         self.logger.info(f"Finalized {len(remaining)} remaining trajectories")
 
+        if reader is not None:
+            reader.stop()
         cap.release()
         if video_writer is not None:
             video_writer.release()
 
         # 写出行为向量：每条完成轨迹一行，保留详细特征
         all_vectors = self.pipeline.completed_vectors
+        # 给每条通行记录一个全局唯一 ID：摄像头 + 录像段起始时间 + track_id
+        segment_start = (
+            video_start_time.strftime("%Y%m%d%H%M%S") if video_start_time else "unknown"
+        )
+        for vector in all_vectors:
+            vector["passage_id"] = f"{camera_id}_{segment_start}_{vector.get('track_id')}"
+            vector["time_known"] = 1 if time_known else 0
+            if not time_known:
+                # 时间未知时不能声称“夜间”，否则夜间规则会误报
+                vector["is_night"] = 0
+                vector["night_ratio"] = 0.0
+
         csv_filename = f"vec_{camera_id}_{date_str}_{hour_str}.csv"
         csv_path = os.path.join(vector_output_dir, csv_filename)
 
@@ -381,6 +442,7 @@ class BatchProcessor:
         exit_line: dict,
         px_per_meter: float,
         calibration: dict,
+        has_homography: bool = False,
     ) -> str:
         """Infer which geometry-dependent behavior fields are trustworthy."""
         entry_valid = entry_line.get("p1", [0, 0]) != entry_line.get("p2", [0, 0])
@@ -391,11 +453,28 @@ class BatchProcessor:
             and calibration.get("ref_point_1", [0, 0]) != calibration.get("ref_point_2", [0, 0])
         )
 
+        # 有单应矩阵时，速度/路径/聚集距离可用透视关系换算
+        if has_configured_roi and has_homography:
+            return "calibrated"
         if has_configured_roi and entry_valid and exit_valid and calibration_valid:
             return "calibrated"
         if has_configured_roi:
             return "roi"
         return "none"
+
+    @staticmethod
+    def _parse_homography(calibration: dict):
+        """解析 3x3 单应矩阵；缺失或格式错误时返回 None。"""
+        raw = calibration.get("homography")
+        if not raw:
+            return None
+        try:
+            matrix = np.asarray(raw, dtype=np.float64)
+        except (TypeError, ValueError):
+            return None
+        if matrix.size != 9:
+            return None
+        return matrix.reshape(3, 3)
 
     @staticmethod
     def _parse_video_datetime(video_name: str) -> tuple:

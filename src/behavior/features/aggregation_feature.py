@@ -1,7 +1,5 @@
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
-
 from ...trajectory.scene_geometry import SceneGeometry
 
 
@@ -11,7 +9,6 @@ class AggregationFeatureExtractor:
     def __init__(self, scene_geometry: SceneGeometry, aggregation_radius_m: float = 5.0):
         self.scene = scene_geometry
         self.aggregation_radius_m = aggregation_radius_m
-        self.aggregation_radius_px = scene_geometry.world_to_pixel(aggregation_radius_m)
 
     def extract(
         self,
@@ -49,21 +46,22 @@ class AggregationFeatureExtractor:
                 }
 
             max_concurrent = max(max_concurrent, len(concurrent_positions) + 1)
-            distances = [
-                np.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
+            # 地面距离（米）：有单应矩阵时按透视关系计算
+            distances_m = [
+                self.scene.ground_distance((cx, cy), (ox, oy))
                 for ox, oy in concurrent_positions.values()
             ]
-            if not distances:
+            if not distances_m:
                 continue
 
-            min_dist_px = min(distances)
-            all_distances.append(min_dist_px)
-            if min_dist_px < self.aggregation_radius_px:
+            min_dist_m = min(distances_m)
+            all_distances.append(min_dist_m)
+            if min_dist_m < self.aggregation_radius_m:
                 aggregation_frames += 1
 
         nearest_m = -1.0
         if all_distances:
-            nearest_m = self.scene.pixel_to_world(min(all_distances))
+            nearest_m = min(all_distances)
 
         return {
             "aggregation_index": round(aggregation_frames / len(centers), 4),

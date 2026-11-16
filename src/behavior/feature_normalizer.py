@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Dict, List
+from typing import Optional, List
 
 
 class FeatureNormalizer:

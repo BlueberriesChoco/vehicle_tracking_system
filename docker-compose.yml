@@ -1,0 +1,21 @@
+services:
+  supervisor:
+    build: .
+    image: vehicle-tracking-system:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      # 宿主机录像目录，默认用仓库内测试视频
+      - ${VIDEO_DIR:-./data/test_videos}:/videos:ro
+    command:
+      - --input
+      - /videos
+      - --camera
+      - admin_in
+      - --output
+      - /app/data/outputs
+    shm_size: "2gb"

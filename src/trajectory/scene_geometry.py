@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 import numpy as np
 import math
 
@@ -17,12 +17,14 @@ class SceneGeometry:
         px_per_meter: float = 20.0,
         geometry_level: str = "none",
         has_roi: bool = False,
+        homography=None,
     ):
         """
         Args:
             entry_line: 入口线段 ((x1,y1), (x2,y2))
             exit_line: 出口线段 ((x1,y1), (x2,y2))
-            px_per_meter: 像素/米换算比例
+            px_per_meter: 像素/米换算比例（无单应矩阵时的近似）
+            homography: 可选 3x3 单应矩阵，把像素坐标映射到地面米制坐标
         """
         self.entry_p1 = np.array(entry_line[0], dtype=np.float64)
         self.entry_p2 = np.array(entry_line[1], dtype=np.float64)
@@ -31,6 +33,39 @@ class SceneGeometry:
         self.px_per_meter = px_per_meter
         self.geometry_level = geometry_level
         self.has_roi = has_roi
+
+        self.homography = None
+        if homography is not None:
+            matrix = np.asarray(homography, dtype=np.float64)
+            if matrix.shape != (3, 3):
+                raise ValueError("homography 必须是 3x3 矩阵")
+            self.homography = matrix
+
+    @property
+    def has_homography(self) -> bool:
+        return self.homography is not None
+
+    def pixel_to_ground(self, x: float, y: float) -> Tuple[float, float]:
+        """像素坐标 → 地面米制坐标。无单应矩阵时退化为常数比例。"""
+        if self.homography is None:
+            scale = self.px_per_meter if self.px_per_meter > 0 else 1.0
+            return float(x) / scale, float(y) / scale
+
+        projected = self.homography @ np.array([float(x), float(y), 1.0], dtype=np.float64)
+        if abs(projected[2]) < 1e-9:
+            return 0.0, 0.0
+        return float(projected[0] / projected[2]), float(projected[1] / projected[2])
+
+    def ground_distance(self, p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
+        """两点之间的地面距离（米）。"""
+        if self.homography is None:
+            if self.px_per_meter <= 0:
+                return 0.0
+            return float(math.hypot(p1[0] - p2[0], p1[1] - p2[1]) / self.px_per_meter)
+
+        x1, y1 = self.pixel_to_ground(*p1)
+        x2, y2 = self.pixel_to_ground(*p2)
+        return float(math.hypot(x2 - x1, y2 - y1))
 
     def check_line_crossing(
         self,
@@ -101,12 +136,10 @@ class SceneGeometry:
         """计算轨迹总长度（米）。"""
         if len(centers) < 2:
             return 0.0
-        total_px = 0.0
+        total = 0.0
         for i in range(1, len(centers)):
-            dx = centers[i][0] - centers[i - 1][0]
-            dy = centers[i][1] - centers[i - 1][1]
-            total_px += math.sqrt(dx * dx + dy * dy)
-        return self.pixel_to_world(total_px)
+            total += self.ground_distance(centers[i - 1], centers[i])
+        return total
 
     @staticmethod
     def point_to_line_distance(

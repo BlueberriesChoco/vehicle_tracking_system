@@ -1,0 +1,14 @@
+.venv
+.git
+data
+tmp
+__pycache__
+*.pyc
+*.onnx
+yolov8n.pt
+tests
+docs
+web
+*.mp4
+*.avi
+*.h264

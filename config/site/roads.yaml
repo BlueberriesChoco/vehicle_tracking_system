@@ -6,3 +6,19 @@ roads:
     direction: inbound
     speed_limit_kmh: null
     adjacent_road_ids: []
+
+  - road_id: zone_a_admin_lane_in
+    name: "Zone A Admin Lane Inbound"
+    zone_id: zone_a_admin_lane
+    road_type: entrance_lane
+    direction: inbound
+    speed_limit_kmh: null
+    adjacent_road_ids: [zone_a_admin_lane_out]
+
+  - road_id: zone_a_admin_lane_out
+    name: "Zone A Admin Lane Outbound"
+    zone_id: zone_a_admin_lane
+    road_type: exit_lane
+    direction: outbound
+    speed_limit_kmh: null
+    adjacent_road_ids: [zone_a_admin_lane_in]

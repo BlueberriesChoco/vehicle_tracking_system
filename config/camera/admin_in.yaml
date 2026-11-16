@@ -1,0 +1,32 @@
+camera_id: admin_in
+camera_name: 综保A区行政车道进
+# ROI 沿左侧白色护栏与右侧黄黑立柱标定，覆盖行政车道、排除右侧主路（大货车）和左侧绿化带
+roi:
+  polygon:
+  - [0, 1080]
+  - [1200, 1080]
+  - [1250, 320]
+  - [850, 300]
+  - [0, 600]
+# 车辆从远端 y≈420 驶向镜头 y≈1070，先过入口线（y=500）再过出口线（y=950）。
+# 两条线必须横跨整个车道宽度，否则未跨线的车辆不会被判为“进入/离开”而被丢弃。
+entry_line:
+  p1: [300, 500]
+  p2: [1230, 500]
+exit_line:
+  p1: [80, 950]
+  p2: [1200, 950]
+# 透视标定：现场测量 >=4 组「像素坐标 -> 地面米制坐标」控制点后，
+# 运行 scripts/calibrate_homography.py --update-config 写入 3x3 homography。
+# 填入后 geometry_level 自动变为 calibrated，speed/path/aggregation 字段变为可靠。
+calibration:
+  # homography:
+  # - [0.1, 0.0, 0.0]
+  # - [0.0, 0.2, 0.0]
+  # - [0.0, 0.0, 1.0]
+  px_per_meter: 50.0
+
+anomaly:
+  # 期望异常比例：按机位调参。66 分钟完整段上 0.05 会到 18%，
+  # 0.02 可回到 14% 左右；配合 --max-alert-rate 可硬性封顶。
+  contamination: 0.05

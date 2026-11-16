@@ -1,5 +1,4 @@
-from datetime import datetime, time, timedelta
-from typing import Tuple
+from datetime import datetime, timedelta
 
 
 def is_night_time(dt: datetime, night_start: int = 22, night_end: int = 6) -> bool:

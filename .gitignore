@@ -1,5 +1,6 @@
 # Virtual environment
 .venv/
+.venv*/
 
 # Python cache
 __pycache__/
@@ -12,3 +13,10 @@ __pycache__/
 # Local validation artifacts
 data/validation/
 data/outputs/
+data/references/
+
+# Model build artifacts
+*.onnx
+yolov8n.pt
+models/*.pth
+models/*.pt

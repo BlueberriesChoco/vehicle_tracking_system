@@ -41,7 +41,34 @@
 | `scripts/run_batch.py` | 批量处理入口。按目录/日期处理多段视频。 |
 | `scripts/calibrate_camera.py` | 交互式摄像头标定工具，用于标 ROI、进出线和参考距离，输出到 `config/camera/<camera_id>.yaml`。 |
 | `scripts/build_baseline.py` | Phase 3 基线构建入口。读取历史 `vec_*.csv`，默认只使用普通车辆生成 JSON 正常行为基线。 |
-| `scripts/run_anomaly_detection.py` | Phase 3 告警检测入口。读取向量 CSV 和基线 JSON，输出告警 CSV，可选输出带异常字段的向量。 |
+| `scripts/train_iforest.py` | Phase 3 无监督检测训练入口。用正常样本训练 Isolation Forest，输出模型 JSON。 |
+| `scripts/train_transformer.py` | 训练 Transformer 轨迹预测模型，输出 `.pt` + `.json`。 |
+| `scripts/run_anomaly_detection.py` | Phase 3 告警检测入口。读取向量 CSV、基线 JSON 和可选 Isolation Forest 模型，输出告警 CSV。 |
+| `scripts/build_graph.py` | 研究要点三入口。构建车辆关系图谱，输出节点社区、图异常指数 G、边和社区摘要 JSON。 |
+| `scripts/extract_mbf.py` | 把现场 `.mbf` 录像转换为可直接解码的 `.h264` 裸流。 |
+| `scripts/calibrate_homography.py` | 由地面控制点求解单应矩阵，可写回摄像头配置。 |
+| `scripts/render_camera_config.py` | 把 ROI / 进出线画到真实帧，目视校验标定。 |
+| `scripts/stitch_cameras.py` | 跨摄像头同车关联，输出匹配对与全局车辆 ID。 |
+| `scripts/run_multi_camera.py` | 多机位编排：逐机位检测/构图 + 跨机位拼接，输出全局 ID 汇总。 |
+| `scripts/update_models.py` | 模型增量更新：用新数据重拟合 IF、微调 Transformer，记录耗时。 |
+| `scripts/calibrate_alert_rate.py` | 告警率自适应标定：搜索满足目标告警率的最大污染率。 |
+| `scripts/eval_with_labels.py` | 有标注时的评估：precision/recall/F1、ROC-AUC、高风险精确率。 |
+| `scripts/soak_test.py` | 浸泡测试：同进程多轮处理，检查内存泄漏与 FPS 漂移。 |
+| `scripts/run_windowed.py` | 分窗处理长视频，单车上报延迟与视频总长解耦。 |
+| `scripts/audit_rules.py` | 规则触发率审计：命中数、可靠性标记、字段分布。 |
+| `scripts/report_metrics.py` | 从全链路产物汇总关键指标为 Markdown，避免文档数字过期。 |
+| `scripts/export_gang_case.py` | 从图谱中导出最值得核查的社区，生成团伙案例报告。 |
+| `scripts/build_demo_pack.py` | 一键生成演示包：单车报告 + 团伙案例 + 指标总览。 |
+| `scripts/delivery_check.py` | 交付门禁：文件齐备、YAML 可解析、文档引用有效、无临时目录。 |
+| `scripts/start.ps1` | Windows 一键启动全链路。 |
+| `scripts/smoke_test.py` | 端到端冒烟测试：串联五个 CLI 并校验输出。 |
+| `scripts/ci.ps1` | 本地 CI：单测 + 冒烟 + 规则审计 + 指标汇总 + 演示包 + 交付清单（共 6 步）。 |
+| `Dockerfile` / `docker-compose.yml` | 容器化部署入口，详见 `deploy/README.md`。 |
+| `scripts/build_risk_report.py` | 研究要点四入口。融合 A/G/T 得到风险 R，输出证据链与 Markdown 排查报告。 |
+| `scripts/run_full_pipeline.py` | 一键端到端原型：视频 → 向量 → 告警 → 图谱 → 风险报告。 |
+| `scripts/run_batch_day.py` | 全天批量处理：遍历 `.mbf`、转 h264、跑向量流水线，支持断点续跑。 |
+| `scripts/eval_system.py` | 技术指标自评：告警率、证据可追溯率、图谱规模、风险分布。 |
+| `scripts/benchmark_throughput.py` | 吞吐基准：检测/端到端 FPS，推算可支撑视频路数。 |
 
 ## `config/` 配置目录
 
@@ -89,6 +116,8 @@
 | `src/trajectory/trajectory_extractor.py` | 轨迹生命周期判断。支持标定进出线判定，也支持“车辆出现到消失”的自动完成判定。 |
 | `src/trajectory/trajectory_smoother.py` | 轨迹平滑器，降低检测框抖动对速度、路径长度和路径平滑度的影响。 |
 | `src/trajectory/path_reference.py` | 参考路径管理。用于计算轨迹相对正常路径的偏离和路径平滑度。 |
+| `src/trajectory/homography.py` | 单应矩阵求解与应用，把像素坐标映射到地面米制坐标。 |
+| `src/trajectory/stitching.py` | 跨摄像头同车关联：拓扑时间窗 + ReID 相似度 + 并查集全局 ID。 |
 | `src/trajectory/__init__.py` | trajectory 包导出文件。 |
 
 ## `src/behavior/` 行为向量模块
@@ -145,9 +174,36 @@
 | 文件 | 作用 |
 |---|---|
 | `src/anomaly/baseline.py` | 正常行为基线构建、保存、加载和 Z-score 评分。默认只对普通车辆建基线。 |
+| `src/anomaly/isolation_forest.py` | 纯 NumPy 自包含 Isolation Forest，输出 [0,1] 异常指数 A；含行为向量适配器与保存/加载。 |
+| `src/anomaly/trajectory_transformer.py` | Transformer 轨迹预测（过去 K 点→未来 M 点），用预测残差判异，输出轨迹异常指数。 |
 | `src/anomaly/rule_engine.py` | 规则引擎。检查超速、长时间滞留、路径偏离、夜间频繁停留，并尊重可靠性字段。 |
-| `src/anomaly/anomaly_detector.py` | 异常检测组合器。合并规则结果和统计基线结果，写入 `anomaly_score/is_anomaly/alert_reason`。 |
+| `src/anomaly/anomaly_detector.py` | 异常检测组合器。合并规则、统计基线和 Isolation Forest 结果，写入异常字段。 |
+| `src/anomaly/alert_budget.py` | 告警预算：按分数把告警量限制在目标比例内，规则命中优先。 |
+| `src/anomaly/metrics.py` | 评估指标：ROC-AUC、precision/recall/F1、阈值精度。 |
+| `src/anomaly/config.py` | 读取 `config/anomaly_config.yaml`（规则阈值等）。 |
 | `src/anomaly/__init__.py` | anomaly 包导出文件。 |
+
+## `src/graph/` 车辆关系图谱模块（研究要点三）
+
+| 文件 | 作用 |
+|---|---|
+| `src/graph/relations.py` | 关系抽取。轨迹解析/重采样、形状相似度、时间重叠，构建共现/跟随/路径相似三类边。 |
+| `src/graph/payload.py` | 图谱载荷组装（节点/社区/边），脚本共用唯一实现。 |
+| `src/graph/community.py` | 纯 NumPy Louvain 社区发现，附模块度和社区摘要。 |
+| `src/graph/anomaly.py` | 图异常指数 G。邻接矩阵低秩 SVD 重构残差（线性图自编码器基线），输出度与聚类系数。 |
+| `src/graph/gae.py` | 图自编码器 GAE（两层 GCN + 内积解码器，边掩码训练），可选 `--method gae`。 |
+| `src/graph/__init__.py` | graph 包导出文件。 |
+
+## `src/risk/` 风险融合与报告模块（研究要点四）
+
+| 文件 | 作用 |
+|---|---|
+| `src/risk/time_frequency.py` | 时间频率异常指数 T（频次、夜间占比、夜间标记）。 |
+| `src/risk/fusion.py` | 风险融合 `R = αA + βG + γT`，输出 0~100 分与风险等级。 |
+| `src/risk/evidence.py` | 结构化证据链，每条证据可回溯到具体向量记录。 |
+| `src/risk/report.py` | 模板报告与本地大模型报告适配器，失败自动回退模板。 |
+| `src/risk/merge.py` | 风险合并：图谱异常/社区信息、跨机位伙伴与全局 ID。 |
+| `src/risk/__init__.py` | risk 包导出文件。 |
 
 ## `src/site/` 园区拓扑模块
 
@@ -168,8 +224,10 @@
 | 文件 | 作用 |
 |---|---|
 | `src/utils/frame_reader.py` | OpenCV 视频读取封装，提供打开、读取、属性获取和释放接口。 |
+| `src/utils/mbf_extract.py` | MBF 录像格式解析：剥离私有封装，还原 H.264 Annex B 裸流。 |
 | `src/utils/logger.py` | 日志工具，统一控制台和文件日志格式。 |
 | `src/utils/time_utils.py` | 时间工具，处理夜间判断、时间重叠、帧号转时间、小时桶等。 |
+| `src/utils/vectors_io.py` | 向量 CSV 统一读取（单文件/目录递归，写入 `_source_file`）。 |
 | `src/utils/__init__.py` | utils 包导出文件。 |
 
 ## `web/map_editor/` 园区地图编辑器

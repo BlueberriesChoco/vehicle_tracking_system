@@ -52,7 +52,8 @@ class ByteTrackTracker:
             当前活跃的轨迹字典
         """
         if self._start_time is None:
-            self._start_time = timestamp or datetime.now()
+            # 固定占位时间：用 datetime.now() 会让结果随运行时刻变化，不可复现
+            self._start_time = timestamp or datetime(2000, 1, 1, 12, 0, 0)
 
         if timestamp is None:
             timestamp = self._start_time + timedelta(seconds=frame_idx / self.frame_rate)
@@ -254,13 +255,12 @@ class ByteTrackTracker:
         if z is not None:
             # 简单指数平滑更新
             alpha = 0.7
-            state[:4] = alpha * z + (1 - alpha) * state[:4]
-            # 更新速度
-            prev_cx, prev_cy = state[0], state[1]
-            state[4] = z[0] - state[0]  # vcx
-            state[5] = z[1] - state[1]  # vcy
-            state[6] = z[2] - state[2]  # vs
-            state[0], state[1], state[2] = z[0], z[1], z[2]
+            prev = state[:4].copy()
+            state[:4] = alpha * z + (1 - alpha) * prev
+            # 速度 = 平滑后位置相对上一帧的变化量（每帧像素）。
+            # 注意必须先保存 prev，再相减；否则算出来的是“观测-平滑值”的残差，
+            # 预测时几乎不移动，快速车辆会因 IoU 过低而丢 ID。
+            state[4:7] = state[:3] - prev[:3]
         self._kalman_states[tid] = state
 
     @staticmethod

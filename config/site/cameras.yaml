@@ -10,3 +10,25 @@ cameras:
     supports_plate_capture: false
     supports_reid: true
     notes: "Overview video can support tracking and vehicle attributes; plate OCR needs a closer camera or dedicated plate model."
+
+  - camera_id: admin_in
+    name: "综保A区行政车道进"
+    zone_id: zone_a_admin_lane
+    road_id: zone_a_admin_lane_in
+    role: admin_lane_entry
+    config_file: "config/camera/admin_in.yaml"
+    video_dir: "F:/A区录像 新/行政车道进"
+    supports_plate_capture: false
+    supports_reid: true
+    notes: "行政通道入口；车辆由远端驶向镜头，已现场标定 ROI 与进出线。"
+
+  - camera_id: admin_out
+    name: "综保A区行政车道出"
+    zone_id: zone_a_admin_lane
+    road_id: zone_a_admin_lane_out
+    role: admin_lane_exit
+    config_file: "config/camera/admin_out.yaml"
+    video_dir: "F:/A区录像 新/行政车道出"
+    supports_plate_capture: false
+    supports_reid: true
+    notes: "行政通道出口；车道为右上到左下的对角走廊，ROI 由真实轨迹反推。"

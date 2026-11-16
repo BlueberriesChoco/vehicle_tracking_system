@@ -25,6 +25,8 @@ DEFAULT_FEATURES = [
     FeatureSpec("max_dwell_sec"),
     FeatureSpec("stop_count"),
     FeatureSpec("dwell_ratio"),
+    # 通行时长是稳定的时序特征，不依赖摄像头标定
+    FeatureSpec("duration_sec"),
     FeatureSpec("path_deviation", "path_reliable"),
     FeatureSpec("path_smoothness", "path_reliable"),
     FeatureSpec("is_night"),
@@ -33,6 +35,8 @@ DEFAULT_FEATURES = [
     FeatureSpec("freq_count_24h"),
     FeatureSpec("aggregation_index", "aggregation_reliable"),
     FeatureSpec("nearest_vehicle_m", "aggregation_reliable"),
+    # 场景上下文特征：不依赖摄像头标定，可直接参与异常评分
+    FeatureSpec("max_concurrent_vehicles"),
 ]
 
 

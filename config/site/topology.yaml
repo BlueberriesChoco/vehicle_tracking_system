@@ -1,9 +1,11 @@
-edges: []
+edges:
+  # 行政通道：进 → 出。车辆进入场区后完成办事再从出口离开；
+  # 实测存在 12~53 秒的快速往返，因此下限放到 20 秒、上限 3 小时。
+  - from_camera_id: admin_in
+    to_camera_id: admin_out
+    min_travel_sec: 20
+    max_travel_sec: 10800
+    route_id: admin_lane_in_to_out
+    notes: "行政通道进→出，含场区内活动时间"
 
-# Add directed road/camera transitions after more cameras are calibrated.
-# Example:
-# - from_camera_id: cam01
-#   to_camera_id: cam02
-#   min_travel_sec: 10
-#   max_travel_sec: 180
-#   route_id: zone_a_gate_to_internal_road
+# 新增机位/边后，用 SiteTopology.validate() 检查一致性。

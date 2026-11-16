@@ -3,9 +3,11 @@
 
 pipeline:
   device: 0                   # GPU 设备编号，-1 表示 CPU
-  frame_skip: 1               # 跳帧处理（1=不跳帧）
+  frame_skip: 1               # 跳帧处理（1=不跳帧；2 时吞吐 +47%、轨迹点减半，见 PERFORMANCE.md P3）
   max_frames: 0               # 最大处理帧数（0=不限制，调试用）
   output_video: false          # 是否输出标注后的视频
+  batch_size: 16              # 批处理推理帧数（1=逐帧；16 左右吞吐约提升 1.8 倍）
+  prefetch_frames: 32         # 独立线程解码的预取队列长度（0=关闭；实测吞吐 +39%）
 
 detection:
   model_path: "models/yolov8s.pt"
@@ -38,9 +40,7 @@ behavior:
 
 output:
   format: "csv"                # csv / parquet
-  save_trajectory_plot: true   # 是否保存轨迹图
   save_events: true            # 是否输出车辆通行事件CSV
-  save_anomaly_only: false     # 仅输出异常车辆
 
 visualization:
   draw_trajectory: true

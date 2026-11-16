@@ -2,11 +2,24 @@
 
 本项目面向综合保税区监管场景，目标是把监控视频中的车辆通行过程转化为结构化行为数据，并为后续异常检测、空间语义拓扑分析、企业/车辆/司机关系风险研判提供数据基础。
 
-当前系统处于**数据采集层和行为向量化层**建设阶段。它可以处理监控视频，输出车辆轨迹、时间、速度、停留、频次、聚集、车型、颜色等行为向量；但还不是完整的“自动判定违规车辆”系统。完整业务异常判断还需要接入园区地图、摄像头拓扑、企业/仓库/车库位置、申报单和车辆授权关系。
+当前系统已贯通**四层链路**：视频行为向量化 → 无监督异常检测 → 车辆关系图谱 → 多维风险融合与大模型报告，并具备跨摄像头同车关联、模型增量更新、容器化部署与端到端冒烟测试。
+
+需要明确的是：系统输出的是**排查线索**，不是违规判定；召回率、精确率等指标依赖现场标注数据，当前状态见 [`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)。
+
+- **一页纸交付说明**：[`START_HERE.md`](START_HERE.md)（先看这个）
+- **目标完成情况**：[`GOAL_STATUS.md`](GOAL_STATUS.md)（哪些达标、为什么没达标、需要你做什么）
+- 交付总览：[`DELIVERY.md`](DELIVERY.md)
+- 技术指标自评：[`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)
+- 指标验证路径对照：[`METRICS_TRACEABILITY.md`](METRICS_TRACEABILITY.md)
+- 性能剖析与优化路线：[`PERFORMANCE.md`](PERFORMANCE.md)
+- 经济效益与社会效益测算：[`BENEFITS.md`](BENEFITS.md)
+- 运行维护手册：[`OPERATIONS.md`](OPERATIONS.md)
+- 现场数据采集需求：[`DATA_REQUIREMENTS.md`](DATA_REQUIREMENTS.md)
+- 端到端演示：[`demo/README.md`](demo/README.md)
 
 ## 核心思路
 
-项目最终要解决的问题不是简单检测车辆，而是回答：
+项目要回答的不是"有没有车"，而是：
 
 ```text
 哪些车辆或司机需要重点关注？
@@ -15,21 +28,49 @@
 应该如何排查？
 ```
 
-因此系统分为四层：
+系统分为四层，每层产出一个可解释的中间量：
 
-1. 视频行为向量化
-   从监控视频中提取车辆检测、跟踪、轨迹、停留、频次和车辆属性。
+```mermaid
+flowchart TB
+    subgraph L0["输入"]
+        V[".mbf 私有录像"] --> X["extract_mbf.py → .h264"]
+    end
 
-2. 行为异常检测
-   基于正常行为分布和规则引擎识别停留过久、夜间异常、频繁出现、异常聚集等行为。
+    subgraph L1["第一层：行为向量化"]
+        X --> DET["YOLOv8s 检测<br/>batch 推理 + 解码预取"]
+        DET --> TRK["ByteTrack 跟踪<br/>ID 保持 / 丢失重连"]
+        TRK --> TRAJ["进出线判定 + 轨迹平滑"]
+        TRAJ --> FEAT["8 类行为特征<br/>速度/停留/路径/夜间/频次/聚集/属性/ReID"]
+    end
 
-3. 空间语义与摄像头拓扑
-   将摄像头绑定到道路、卡口、企业门口、仓库、停车区等语义区域，判断车辆路径是否合理。
+    subgraph L2["第二层：个体异常 → A"]
+        FEAT --> IF["Isolation Forest<br/>仅用正常样本训练"]
+        FEAT --> TF["Transformer 轨迹预测<br/>→ 预测残差"]
+        FEAT --> RULE["规则引擎<br/>超速/滞留/蛇形/夜间"]
+        IF --> A["行为异常指数 A"]
+    end
 
-4. 风险融合与解释
-   融合行为异常、空间路径异常、企业/司机/车辆关系异常，输出可解释风险证据和排查建议。
+    subgraph L3["第三层：关系图谱 → G"]
+        FEAT --> GR["车辆关系图<br/>共现/聚集/跟随/路径相似 + top-k 稀疏"]
+        GR --> GA["SVD / GAE 重构误差"]
+        GA --> LV["Louvain 社区发现"]
+        LV --> G["图异常指数 G"]
+    end
 
-当前代码主要完成第 1 层，并为第 2 层和第 3 层预留接口。
+    subgraph L4["第四层：融合与解释"]
+        A --> R["R = αA + βG + γT"]
+        G --> R
+        T["时间频率指数 T<br/>频次 + 夜间占比"] --> R
+        R --> EV["结构化证据链<br/>每条可回溯到录像分段"]
+        EV --> REP["风险报告<br/>模板 / 本地大模型"]
+    end
+
+    REP --> OUT["排查线索（非违规判定）"]
+```
+
+四层均已实现。指标口径见 [`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)，
+逐项验证路径见 [`METRICS_TRACEABILITY.md`](METRICS_TRACEABILITY.md)，
+性能瓶颈与优化路线见 [`PERFORMANCE.md`](PERFORMANCE.md)。
 
 ## 当前能力
 
@@ -40,6 +81,7 @@
 - 轨迹提取和平滑。
 - 行为向量计算：
   - 平均速度
+- 速度变异系数
   - 最大速度
   - 停留时长
   - 停留次数
@@ -61,12 +103,37 @@
 
 ## 当前限制
 
-- 未配置 ROI 的摄像头会使用全画面，可能混入路边停车或无关道路车辆。
-- 未透视标定的摄像头，速度、路径偏离、车辆间距不能作为正式风险依据。
-- 远景监控下车牌通常像素不足，OCR 不稳定。
-- `anomaly_score`、`is_anomaly`、`alert_reason` 已可通过 Phase 3 脚本离线生成，但尚未和视频处理主流程实时联动。
-- 尚未接入企业、司机、仓库、申报单、车辆授权关系。
-- 园区空间语义地图和摄像头拓扑已有配置骨架，仍需要填入真实道路、摄像头和业务路线数据。
+> 全部为**实测或已知**的限制，对应的指标状态见 [`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)。
+
+**几何与成像**
+
+- 未配置 ROI 的摄像头会使用全画面，可能混入路边停车或无关道路车辆；
+- 未透视标定的摄像头，速度、路径偏离、车辆间距**不作正式风险依据**
+  （字段 `speed_reliable=0` / `path_reliable=0`，相关规则自动跳过——这是设计行为，不是故障）；
+- 远景车牌像素不足：实测 1080p 下车牌高约 60px，easyocr 会把 `87316` 读成 `873061`，
+  省份汉字读不出 → **车牌不作身份依据**（宁可不出，也不输出错误车牌）。
+
+**识别能力**
+
+- 跨机位 Re-ID：自动构造的同车/异车评估显示 **AUC 0.794、EER 28%**（加属性先验 0.827），
+  远未达到 90% 目标；HSV / ImageNet-ResNet50 / OSNet(行人模型) 三种替代方案更差；
+- 序列号/团伙/边准确率等指标缺真实标注，无法计算 AUC。
+
+**时间与场景**
+
+- 该行政车道**夜间基本无车**（00:00 与 20:57 两段 ROI 内检出均为 0），
+  所以"夜间规则"很少在真实数据中触发；反过来，夜间一旦出现车辆就是强信号；
+- 未接入企业、司机、仓库、申报单、车辆授权关系（系统设计上**只依赖视频**）；
+- 园区空间语义地图和摄像头拓扑已有配置骨架，仍需填入真实道路、摄像头与业务路线。
+
+**性能与规模**
+
+- 20 路 1080P 未达标：端到端 **8.4 路**、`frame_skip=2` 时 **12.7 路**；
+  GPU ReID / TensorRT 在本机（CUDA 11.8）不可用，见 [`PERFORMANCE.md`](PERFORMANCE.md)；
+- 7×24 稳定性只做了 300 轮浸泡（25 分钟），未做完整 72 小时。
+
+> 已集成说明：`anomaly_score` / `is_anomaly` / `alert_reason` 与图谱、风险融合、报告
+> **已由 `run_full_pipeline.py` 串成一次运行**，不再需要分步执行（分步脚本仍保留，便于单独调试）。
 
 ## 项目结构
 
@@ -120,6 +187,113 @@ models/yolov8s.pt
 直接打开 `web/map_editor/index.html`，无需安装前端依赖。编辑器以综保区 A 区围网图为底图，支持添加和维护企业区域、道路、摄像头及其属性，并支持本地自动保存、撤销重做、JSON 导入导出和 PNG 导出。
 
 地图坐标采用底图像素坐标，不是经纬度。获得 CAD 或现场测量坐标后，可再转换到 `config/site/` 的园区拓扑配置。
+
+## 现场 MBF 录像转换
+
+现场导出的 `.mbf` 录像内部是标准 H.264 Annex B 裸流，但 OpenCV 不能直接读取。先转换为 `.h264`：
+
+```bash
+python scripts/extract_mbf.py \
+  --input "F:/A区录像 新/行政车道进" \
+  --output data/outputs/h264/admin_in
+```
+
+转换后即可用 `run_pipeline.py` 直接处理：
+
+```bash
+python scripts/run_pipeline.py \
+  --video data/outputs/h264/admin_in/<录像文件名>.h264 \
+  --camera admin_in \
+  --output data/outputs
+```
+
+## 一键端到端原型
+
+从一段视频直接产出行为向量、告警、关系图谱和风险报告：
+
+```bash
+python scripts/run_full_pipeline.py \
+  --input data/outputs/h264/admin_in/<录像文件名>.h264 \
+  --camera admin_in \
+  --output data/outputs/proto \
+  --max-frames 3000
+```
+
+支持 `.mp4` / `.h264` / `.mbf`；模型缺失时会自动训练。输出：
+
+- `alerts/alerts_<camera>.csv`：告警；
+- `graphs/graph_<camera>.json`：关系图谱与图异常指数 G；
+- `risk/risk_<camera>.json|md`：风险融合与排查报告。
+
+## 全天批量处理
+
+处理一整天所有录像（自动转 h264、断点续跑）：
+
+```bash
+python scripts/run_batch_day.py \
+  --mbf-dir "F:/A区录像 新/行政车道进" \
+  --camera admin_in \
+  --output data/outputs/day_20260901 \
+  --max-frames 600
+```
+
+- 默认跳过已处理的分段（`--force` 强制重跑）；
+- `--only 8,10,12` 只处理指定分段（按文件名时间顺序的 1-based 序号）；
+- 同一小时内的多个分段会带开始时间后缀，避免互相覆盖；
+- 进度与结果写入 `batch_day_summary.json`。
+
+## 性能基准
+
+```bash
+python scripts/benchmark_throughput.py \
+  --video data/outputs/h264/admin_in/<录像>.h264 \
+  --camera admin_in \
+  --frames 200
+```
+
+实测（RTX 3060 Laptop 6GB，1080p，不跳帧）：
+
+| 配置 | 端到端 FPS | 按 15 FPS/路折算 |
+|---|---|---|
+| 无解码预取（batch=16） | 98.0 | 约 6.5 路 |
+| **解码预取 + batch=16（默认）** | **124.5** | **约 8.3 路** |
+| 解码预取 + batch=32 | 125.6 | 约 8.4 路 |
+| 解码预取 + batch=32 + `frame_skip=2` | **190.6** | **约 12.7 路** |
+
+批处理推理（`pipeline.batch_size`）把多帧合并成一次 YOLO 前向；解码预取（`pipeline.prefetch_frames`）
+用独立线程解码，与推理重叠。两者叠加比逐帧提升约 2.3 倍。
+
+进一步分析（`cProfile` 实测，详见 [`PERFORMANCE.md`](PERFORMANCE.md)）：
+
+- **解码占单帧时间 25.6%**，是最大单项——"解码不是瓶颈"的旧结论不成立
+  （那时测的是"纯解码循环"的 337 FPS，与流水线中的并发场景不同）；
+- ReID 每辆约 111ms、跑在 CPU，占 9.6%；
+- **跟踪/特征提取等 Python 逻辑没有进入热点前 8**，"瓶颈在逐帧 Python"的旧判断不成立；
+- 当前真正的瓶颈：解码（已用独立线程重叠）+ 检测推理（需 TensorRT 才能再上一档）。
+
+距离“单卡 20 路 1080P”仍差约 2.6 倍，继续提升需要 C++/TensorRT 推理管线，或把跟踪/裁剪也移到 GPU。
+
+### 端到端延迟
+
+`run_full_pipeline.py` 处理 1 分钟视频（1500 帧）到输出风险报告：
+
+| 场景 | 耗时 |
+|---|---|
+| 冷启动（含模型训练） | 24.9s |
+| 热运行 | 23.1s |
+
+产出 15 辆车、2 条中风险，折合单车摊销约 1.5s，满足“≤2 分钟”指标。延迟随片段长度线性增长，长视频建议按短窗口流式处理。
+
+## 端到端演示
+
+`demo/` 目录记录了从现场 `.mbf` 到风险报告的完整运行结果：
+
+```text
+现场 .mbf (236 MB) → .h264 (234 MB) → 3000 帧全链路 → 7 辆车 / 1 条中风险
+```
+
+- 步骤与命令：[demo/README.md](demo/README.md)
+- 实际报告样例：[demo/risk_sample.md](demo/risk_sample.md)
 
 ## 单视频运行
 
@@ -185,6 +359,7 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | 字段 | 说明 |
 |---|---|
 | `track_id` | 当前视频段内轨迹 ID |
+| `passage_id` | 全局唯一通行 ID：摄像头_录像段起始时间_track_id |
 | `global_vehicle_id` | 日聚合后的全局车辆 ID |
 | `segment_count` | 日聚合合并的视频段数 |
 | `camera_id` | 摄像头 ID |
@@ -205,6 +380,7 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `avg_speed_ms` | 平均速度，m/s，未标定时不建议用于告警 |
 | `max_speed_ms` | 最大速度，m/s，未标定时不建议用于告警 |
 | `speed_variance` | 速度方差 |
+| `speed_cv` | 速度变异系数（标准差/均值），衡量车速稳定性；研究要点一要求的特征 |
 | `max_dwell_sec` | 最大停留时间 |
 | `stop_count` | 停留次数 |
 | `dwell_ratio` | 停留占比 |
@@ -216,11 +392,14 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `freq_count_24h` | 24 小时频次计数 |
 | `aggregation_index` | 聚集行为指数 |
 | `nearest_vehicle_m` | 最近车辆距离，米 |
+| `max_concurrent_vehicles` | 该车通行期间画面内同时出现的最大车辆数 |
 | `trajectory_points` | 轨迹点序列 |
 | `reid_embedding` | ReID 特征向量 |
-| `anomaly_score` | 异常分数，占位或待接入 |
-| `is_anomaly` | 是否异常，占位或待接入 |
-| `alert_reason` | 告警原因，占位或待接入 |
+| `anomaly_score` | 统计基线 Z-score 异常分数 |
+| `is_anomaly` | 是否异常（规则/基线/Isolation Forest 任一命中） |
+| `alert_reason` | 告警原因 |
+| `iforest_score` | 无监督异常指数 A（0~1，越大越异常） |
+| `iforest_anomaly` | Isolation Forest 是否判为异常 |
 
 ## 行政通道分析范围
 
@@ -235,6 +414,21 @@ data/outputs/vectors/cam01/20260422/vec_cam01_20260422_08.csv
 | `analysis_target` | 是否纳入行政通道异常分析，普通车为 `1`，货车等默认 `0` |
 
 Phase 3 默认只对 `vehicle_group = ordinary` 的车辆训练基线和生成告警。货车记录会保留在向量和事件 CSV 中，便于复核模型是否正确区分，但不会参与行政通道风险判断。
+
+**实测校验（66 分钟、444 次通行）**：
+
+| vehicle_group / vehicle_type | 数量 | analysis_target |
+|---|---|---|
+| ordinary / sedan | 418 | 1 |
+| ordinary / suv | 14 | 1 |
+| **freight / truck** | **8** | 0 |
+| **two_wheeler / motorcycle** | **4** | 0 |
+
+`ordinary` 合计 **432**，与参与分析的车辆数完全一致；被排除的 **12 辆正是 8 辆卡车 + 4 辆摩托车**——
+说明类型判定与排除逻辑工作正常，不是误杀。
+
+> 注意：这条行政车道**并非只有轿车**——66 分钟里有 12 次货运/两轮车通行（占 2.7%），
+> 只是它们不进入行政通道的异常研判。
 ## Phase 3 基线和告警
 
 Phase 3 不直接重跑视频检测，而是读取 Phase 1/2 已生成的行为向量 CSV，建立正常行为基线并输出告警 CSV。
@@ -271,6 +465,242 @@ data/outputs/alerts/alerts_<camera_id>.csv
 | 统计基线 | 使用历史正常行为的均值和标准差计算各字段 Z-score |
 
 Phase 3 默认只分析 `ordinary` 普通车辆；货车等非行政通道研判对象会保留记录但不参与告警。规则和统计基线都会尊重可靠性字段。比如 `speed_reliable = 0` 时，不使用速度触发超速告警；`path_reliable = 0` 时，不使用路径偏离触发告警。
+
+### 无监督增强（研究要点二）
+
+除了规则和 Z-score 统计基线，Phase 3 还支持两条无监督路径：
+
+```bash
+# 路径二：Isolation Forest，输出行为异常指数 A（iforest_score）
+python scripts/train_iforest.py \
+  --input data/outputs/vectors/cam01 \
+  --output data/references/iforest_cam01.json
+
+# 路径一：Transformer 轨迹预测，用预测残差判异（traj_residual）
+python scripts/train_transformer.py \
+  --input data/outputs/vectors/cam01 \
+  --output data/references/traj_cam01 \
+  --past-len 5 --future-len 5 --epochs 20
+
+# 检测时同时加载两个模型
+python scripts/run_anomaly_detection.py \
+  --input data/outputs/vectors/cam01 \
+  --iforest data/references/iforest_cam01.json \
+  --trajectory-model data/references/traj_cam01 \
+  --output data/outputs/alerts/alerts_cam01.csv
+```
+
+说明：
+
+- `iforest_score` 即“行为异常指数 A”，范围 0~1，越大越异常；
+- `traj_residual` 是 Transformer 对未来轨迹的预测位移残差（像素），越大越异常；
+- 两者都只对 `ordinary` 普通车辆生效，并尊重可靠性字段。
+
+## 车辆关系图谱与社区发现
+
+研究要点三：从行为向量中自动抽取车辆间的共现、跟随、路径相似关系，构建“车辆—车辆”图谱，识别异常团伙。
+
+```bash
+python scripts/build_graph.py \
+  --input data/outputs/vectors/cam01 \
+  --output data/outputs/graphs/graph_cam01.json \
+  --top-k 3
+```
+
+`--top-k` 表示每个节点只保留最相似的 k 个邻居（默认 3）。单车道场景下轨迹普遍相似，不加限制会退化成完全图；top-k 稀疏化后模块度通常能从 0.05 提升到 0.5 以上。
+
+**`top_k` 的实测敏感性**（444 辆车）：
+
+| top_k | 边数 | 社区数 | 模块度 Q | G 中位数 | G p90 | 最大社区 |
+|---|---|---|---|---|---|---|
+| 1 | 625 | 145 | **0.8757** | 0.334 | 0.625 | 6 |
+| 2 | 1070 | 127 | 0.7462 | 0.410 | 0.637 | 8 |
+| **3（默认）** | **1427** | **105** | **0.7348** | **0.511** | **0.712** | **10** |
+| 5 | 2060 | 96 | 0.5875 | 0.527 | 0.770 | 13 |
+| 8 | 2897 | 78 | 0.4468 | 0.515 | 0.777 | **35** |
+
+- `top_k=1` 模块度最高但图过稀（625 条边），G 中位数偏低；
+- `top_k=8` 时模块度掉到 0.447，并出现**35 辆车的巨型社区**（过度合并）；
+- **默认 3 是中间档**：Q=0.735、最大社区 10 辆，结构清晰且不吞并。
+
+**社区规模分布**（105 个社区 / 432 个节点）：
+
+| 规模 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|
+| 社区数 | 23 | 26 | 18 | 17 | 7 | 6 | 6 | 1 | 1 |
+
+- **没有孤立节点**（`top_k=3` 保证每个节点都有邻居），最小社区 2 辆；
+- 中位规模 4 辆，最大 10 辆；
+- **≥3 节点的社区 82 个**（78%）——这是"团伙候选"的可用集合；
+- 没有出现"一个社区吞掉半张图"的退化情况。
+
+> ⚠️ **G 是"本次运行内的相对值"**：`graph_anomaly_index` 经过 min-max 归一化，
+> 所以每次运行的 G 最大值恒为 1.0。**不同 top_k、不同数据集的 G 不能直接比较**，
+> 只能在同一张图内比较谁更异常。判断绝对异常程度请看 `reconstruction_error` 原始值。
+
+
+图异常指数 G 默认用低秩 SVD 重构（`--method svd`）。也可切换为图自编码器：
+
+```bash
+python scripts/build_graph.py --input ... --output ... --method gae --gae-epochs 200
+```
+
+注意：单张图上“训练图=评分图”的 GAE 自监督不够稳定，建议后续用“正常基线图训练 + 目标图评分”。
+
+输出 JSON 包含：
+
+- `nodes`：车辆节点、所属社区、图异常指数 G（0~1）、重构残差、度、聚类系数；
+- `communities`：社区规模、内部权重、密度，供人工复核团伙；
+- `edges`：`co_occurrence`（共现）、`following`（跟随）、`path_similarity`（路径相似）三类关系。
+
+当前图异常指数 G 采用邻接矩阵低秩 SVD 重构残差（线性图自编码器基线）；神经图自编码器（GAE/VGAE）属于后续工作。
+
+## 跨摄像头同车关联
+
+```bash
+python scripts/stitch_cameras.py \
+  --from-vectors data/outputs/vectors/cam_up \
+  --to-vectors data/outputs/vectors/cam_down \
+  --from-camera cam_up \
+  --to-camera cam_down \
+  --output data/outputs/stitch/cam_up_to_down.json
+```
+
+匹配逻辑：
+
+1. 用 `config/site/topology.yaml` 的通行时间窗口筛选候选；
+2. 用 ReID 余弦相似度做一对一贪心匹配；
+3. 用并查集合并为 `global_vehicle_id`。
+
+当前 ReID 为 HSV 直方图 fallback，接入正式 ReID 模型后可直接复用。
+
+## 多维度风险融合与排查报告
+
+研究要点四：融合行为异常指数 A、图异常指数 G、时间频率异常指数 T，得到综合风险 R，并生成结构化证据链和排查报告。
+
+```bash
+python scripts/build_risk_report.py \
+  --input data/outputs/alerts/vectors_cam01.csv \
+  --graph data/outputs/graphs/graph_cam01.json \
+  --output data/outputs/risk/risk_cam01.json \
+  --markdown data/outputs/risk/risk_cam01.md
+```
+
+融合公式：
+
+```text
+R = αA + βG + γT        （默认 α=0.4、β=0.35、γ=0.25，自动归一化）
+```
+
+- `A`：`iforest_score`（Isolation Forest 行为异常指数）；
+- `G`：`graph_anomaly_index`（图异常指数）；
+- `T`：`time_freq_index`（时间频率异常指数：24h 频次、夜间占比、夜间标记）。
+
+**权重敏感性**（444 辆车，改权重后重算 R）：
+
+| 权重 | 高风险 | 中风险 | R 最高 | R 中位数 | 与默认 Top10 重合 |
+|---|---|---|---|---|---|
+| **0.40 / 0.35 / 0.25（默认）** | **0** | **8** | **59.0** | 35.5 | 10/10 |
+| 1/3 / 1/3 / 1/3 | 0 | 1 | 53.3 | 31.8 | 8/10 |
+| 0.60 / 0.20 / 0.20（A 为主） | 0 | 14 | 57.0 | 36.8 | 4/10 |
+| 0.20 / 0.60 / 0.20（G 为主） | 0 | **67** | 70.9 | 39.5 | 7/10 |
+| 0.20 / 0.20 / 0.60（T 为主） | 0 | 0 | 32.0 | 19.1 | 8/10 |
+| 只用 A | 3 | 73 | 82.2 | 43.0 | **1/10** |
+| 只用 G | **26** | 210 | 100.0 | 50.9 | 7/10 |
+
+要点：
+
+- **"8 辆中风险"是默认权重的直接结果**——换成等权重只剩 1 辆，G 为主则涨到 67 辆；
+- **"0 辆高风险"不是"没有高危车"，而是当前权重下 R 最高只有 59 分，80 分档够不到**。
+  要把 80 档激活，得提高 β（G 是 min-max 归一化的，最大值恒为 1.0，能把 R 顶到 100）
+  或下调 80 分阈值；
+- 只用 G 会产生 26 辆高风险——显然过拟合到图结构，**不建议**。
+
+**有效权重 ≠ 标称权重**（同样 444 辆实测）：
+
+| 维度 | 实测范围 | 标称权重 | **最大贡献** |
+|---|---|---|---|
+| A（`iforest_score`） | 0.000 – **0.822** | 0.40 | **0.329** |
+| G（`graph_anomaly_index`） | 0.000 – **1.000** | 0.35 | **0.350** |
+| T | 全 0（本段无夜间/高频） | 0.25 | 0.000 |
+
+`A` 的上界是 IF 分数公式决定的 0.822（不是 min-max），`G` 恒能到 1.0，
+因此**标称 α>β，实际最大贡献反而是 G 更大**（0.350 vs 0.329）。差 6%，不算错误，
+但说明调权重时不能只看标称数字。
+
+> **T 在本数据上恒为 0**：`time_freq_index` 依赖 `freq_count_24h`，后者依赖 `plate_hash`
+> （车牌识别）。实测 444 辆里只有 **2 辆**有车牌哈希，通行次数恒为 1 → T 恒为 0。
+> 所以 `R = 0.4A + 0.35G + 0.25×0` 在当前数据上**实际只有两项**。
+> 要激活 T 需要**两个**条件：① 可用的车牌识别或跨天 Re-ID（识别同一辆车）；
+> ② 足够长的时间窗（当前只有 66 分钟，444 辆车 444 次通行，每车只出现一次，
+> 日内高频无从观察）。详见 `ACCEPTANCE_REPORT.md` 第 3.2 节。
+
+**多信号印证不提升风险**（实测）：5 辆被 ≥2 个独立信号命中的车**全部是低风险**：
+
+```text
+89   IF+TF+规则  R=39.7  A=0.82 G=0.19
+231  IF+TF+规则  R=39.7  A=0.74 G=0.29
+171  IF+TF       R=43.5  A=0.64 G=0.51
+273  IF+规则      R=32.8  A=0.69 G=0.15
+935  IF+TF       R=26.8  A=0.66 G=0.01
+```
+
+原因是它们属于"个体异常"而非"群体成员"，G 很低；而 8 辆中风险里有 5 辆 G≥0.91。
+
+> 当前融合是**"图优先"**的：进入中风险主要靠 G，个体异常哪怕三信号同时命中也不足以抬高 R。
+> 若业务上希望"多信号印证 = 高优先级"，应在融合层加**印证规则**
+> （如 ≥2 个独立信号时至少给 medium），而不是继续调 α/β/γ。当前实现没有这条规则，属有意简化。
+
+**可选：开启印证规则**（默认关闭）
+
+```bash
+python scripts/build_risk_report.py ... --corroboration
+```
+
+开启后：同一辆车被 **≥2 个独立信号**（Isolation Forest / Transformer 残差 / 预设规则）
+命中时，即使加权分不足也提升到 medium。实测同输入下：
+
+| 模式 | 高风险 | 中风险 | R 最高 |
+|---|---|---|---|
+| 默认 | 0 | **8** | 59.0 |
+| `--corroboration` | 0 | **13**（+5） | 59.0 |
+
+新增的 5 辆正是"多信号但图异常低"的个体异常车（89、231、171、273、935）。
+
+> 默认关闭的原因：开与不开是**两种业务口径**（"抓群体"vs"抓个体"），
+> 应显式选择，而不是藏在默认值里。
+
+输出：
+
+- `risk_score_100`：0~100 分，≥80 为 high、≥50 为 medium；
+  > 注意：`is_anomaly`（个体告警）与 `risk_level`（融合风险）是**两套判据**。
+  > 实测 444 辆中，41 辆个体告警、8 辆中风险，**交集只有 3 辆**——
+  > 其余 5 辆中风险车是个体正常但图异常 G 很高。排查以风险列表为准。
+- `evidence`：结构化证据链，每条证据都带 `camera_id`/`track_id`/源文件，可回溯到视频轨迹；
+- `report_text`：排查报告。默认使用确定性的模板后端（零幻觉）；配置 `--llm-endpoint` 后可接入本地/内网大模型，失败时自动回退模板。
+
+### 本地大模型报告
+
+本机部署 Ollama 后，可直接接入本地模型生成排查建议：
+
+```bash
+python scripts/build_risk_report.py \
+  --input data/outputs/alerts/vectors_admin_in.csv \
+  --graph data/outputs/graphs/graph_admin_in.json \
+  --output data/outputs/risk/risk.json \
+  --markdown data/outputs/risk/risk.md \
+  --llm-endpoint http://127.0.0.1:11434/v1/chat/completions \
+  --llm-model qwen2.5:7b \
+  --top 5
+```
+
+安全机制：
+
+- 大模型只接收结构化证据，不检索外部信息；
+- 输出会做**事实校验**：引用的数字必须出现在证据或风险分量中，车辆编号必须匹配；
+- 校验不通过时自动回退模板，并在 `report_validation` 中记录原因；
+- 报告始终保留模板证据链，大模型只追加“排查建议”。
+
 ## 摄像头配置等级
 
 系统支持多摄像头渐进接入，不要求所有摄像头一开始都完成精细标定。
@@ -318,6 +748,28 @@ config/camera/<camera_id>.yaml
    用于估算速度和空间距离。
 
 对大量摄像头，建议先做 ROI 级配置，再对重点通道做完整标定。
+
+### 透视标定（单应矩阵）
+
+单应矩阵把像素坐标映射到地面米制坐标，是速度、路径偏离、聚集距离真正可用的前提。
+
+现场测量至少 4 组「像素坐标 → 地面米制坐标」控制点（例如车道线端点、斑马线角点），然后：
+
+```bash
+python scripts/calibrate_homography.py \
+  --pixels "100,200;800,200;800,900;100,900" \
+  --world  "0,0;10,0;10,15;0,15" \
+  --camera admin_in \
+  --update-config
+```
+
+脚本会把 3x3 矩阵写入 `config/camera/<camera>.yaml` 的 `calibration.homography`。写入后：
+
+- `geometry_level` 自动变为 `calibrated`；
+- `speed_reliable` / `path_reliable` / `aggregation_reliable` 变为 1；
+- 速度按透视关系换算为 m/s，可进一步验证 ±5 km/h 指标。
+
+未标定时速度字段会被标记为不可靠，异常检测和规则不会使用它们。
 
 ## 真实视频测试结论
 

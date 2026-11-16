@@ -1,19 +1,39 @@
 # Phase 3 anomaly detection configuration
+# 本文件由 run_anomaly_detection.py / run_full_pipeline.py 读取；
+# rules 下的阈值会传给 RuleEngine，修改后立即生效。
 
 analysis_scope:
   target_groups: ["ordinary"]   # 行政通道只分析普通车辆；货车保留记录但不参与告警
 
 baseline:
-  min_days: 7
-  min_samples: 100
   output_dir: "data/references"
   default_threshold: 3.0
+
+# 研究要点二：无监督个体异常检测（Isolation Forest，输出行为异常指数 A）
+isolation_forest:
+  enabled: true
+  n_estimators: 100
+  max_samples: 256
+  # 与 train_iforest.py / run_full_pipeline.py 的默认值保持一致；
+  # 完整日 66 分钟数据上 0.05 会到 18%，需要更低值时用 calibrate_alert_rate.py 标定。
+  contamination: 0.05
+  random_state: 42
+  output_dir: "data/references"
+  model_file: "iforest_<camera_id>.json"
 
 rules:
   speed_max_kmh: 40.0
   dwell_max_sec: 120.0
   deviation_max_m: 3.0
   night_stop_count: 2
+  night_high_freq_count: 6.0
+  # 该行政车道夜间实测基本无车（00:00 / 20:57 两个时段 ROI 内检出均为 0），
+  # 因此“夜间出现”本身即告警；设为 0 可关闭。
+  night_any_passage: 1
+  # 蛇形：平均转角（弧度/点）≥ 该值判为蛇形。值越大越犹豫。
+  # 实测 443 辆车分布：p50=0.17、p90=0.28、p95=0.35、p99=0.55；
+  # 取 0.5 时约 1.4% 车辆触发，取 0.3 会到 8.4%，过宽。
+  snake_smoothness_max: 0.5
 
 output:
   alerts_dir: "data/outputs/alerts"

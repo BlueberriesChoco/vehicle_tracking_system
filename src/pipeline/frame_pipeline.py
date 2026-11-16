@@ -42,25 +42,44 @@ class FramePipeline:
         frame: np.ndarray,
         timestamp: Optional[datetime] = None,
     ) -> Tuple[np.ndarray, List[dict]]:
-        """处理单帧。
+        """处理单帧（检测 + 跟踪 + 向量化）。"""
+        detections = self.detector.detect(frame)
+        return self._process_with_detections(frame, detections, timestamp)
 
-        Args:
-            frame: BGR 图像 (H, W, 3)
-            timestamp: 帧时间戳
+    def process_frames(
+        self,
+        frames: List[np.ndarray],
+        timestamps: Optional[List[datetime]] = None,
+    ) -> List[Tuple[np.ndarray, List[dict]]]:
+        """批量检测 + 逐帧跟踪/向量化。
 
-        Returns:
-            (标注后的帧, 新完成的行为向量列表)
+        批处理只合并“检测”这一步（把多帧送进同一次 YOLO 前向），
+        跟踪、轨迹完成判定和行为向量化仍按帧顺序执行，保证时序正确。
         """
+        if not frames:
+            return []
+
+        detections_batch = self.detector.detect_batch(frames)
+        outputs = []
+        for index, frame in enumerate(frames):
+            timestamp = timestamps[index] if timestamps is not None and index < len(timestamps) else None
+            outputs.append(self._process_with_detections(frame, detections_batch[index], timestamp))
+        return outputs
+
+    def _process_with_detections(
+        self,
+        frame: np.ndarray,
+        detections: List[dict],
+        timestamp: Optional[datetime] = None,
+    ) -> Tuple[np.ndarray, List[dict]]:
         if self._start_time is None:
-            self._start_time = timestamp or datetime.now()
+            # 固定占位时间：用 datetime.now() 会让结果随运行时刻变化，不可复现
+            self._start_time = timestamp or datetime(2000, 1, 1, 12, 0, 0)
 
         if timestamp is None:
             timestamp = self._start_time + timedelta(
                 seconds=self._frame_idx / self.frame_rate
             )
-
-        # Step 1: 检测
-        detections = self.detector.detect(frame)
 
         # Step 2: ROI 过滤
         detections = self.roi_filter.filter_detections(detections)

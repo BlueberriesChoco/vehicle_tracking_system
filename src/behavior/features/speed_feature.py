@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional
+from typing import List, Optional
 import numpy as np
 
 from ...trajectory.scene_geometry import SceneGeometry
@@ -15,11 +15,9 @@ class SpeedFeatureExtractor:
         self,
         scene_geometry: SceneGeometry,
         frame_rate: int = 25,
-        dwell_threshold_ms: float = 0.5,
     ):
         self.scene = scene_geometry
         self.frame_rate = frame_rate
-        self.dwell_threshold_ms = dwell_threshold_ms
 
     def compute_instant_speeds(
         self,
@@ -33,10 +31,11 @@ class SpeedFeatureExtractor:
 
         speeds = []
         for i in range(1, len(xs_smooth)):
-            dx = xs_smooth[i] - xs_smooth[i - 1]
-            dy = ys_smooth[i] - ys_smooth[i - 1]
-            dist_px = np.sqrt(dx * dx + dy * dy)
-            dist_m = self.scene.pixel_to_world(dist_px)
+            # 距离（米）：有单应矩阵时按地面坐标计算，否则按常数 px_per_meter 近似
+            dist_m = self.scene.ground_distance(
+                (xs_smooth[i - 1], ys_smooth[i - 1]),
+                (xs_smooth[i], ys_smooth[i]),
+            )
             # 速度 = 距离(米) / 时间(秒), 时间 = 1/frame_rate
             delta_sec = 1.0 / self.frame_rate
             if timestamps is not None and len(timestamps) == len(xs_smooth):
@@ -66,6 +65,7 @@ class SpeedFeatureExtractor:
                 "avg_speed_ms": 0.0,
                 "max_speed_ms": 0.0,
                 "speed_variance": 0.0,
+                "speed_cv": 0.0,
                 "instant_speeds": [],
             }
 
@@ -73,5 +73,9 @@ class SpeedFeatureExtractor:
             "avg_speed_ms": round(float(np.mean(speeds)), 3),
             "max_speed_ms": round(float(np.max(speeds)), 3),
             "speed_variance": round(float(np.var(speeds)), 3),
+            # 速度变异系数 CV = 标准差 / 均值，衡量车速稳定性（研究要点一要求的特征）
+            "speed_cv": round(
+                float(np.std(speeds)) / float(np.mean(speeds)), 4
+            ) if float(np.mean(speeds)) > 1e-6 else 0.0,
             "instant_speeds": speeds.tolist(),
         }

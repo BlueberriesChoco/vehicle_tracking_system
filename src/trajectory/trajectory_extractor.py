@@ -1,6 +1,5 @@
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Tuple
 import numpy as np
-from datetime import datetime
 
 from ..tracking.tracklet import Tracklet
 from .scene_geometry import SceneGeometry

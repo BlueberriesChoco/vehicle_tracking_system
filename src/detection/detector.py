@@ -46,8 +46,15 @@ class VehicleDetector:
         Returns:
             List[dict]: [{"bbox": [x1,y1,x2,y2], "confidence": float, "class_id": int, "class_name": str}, ...]
         """
+        return self.detect_batch([frame])[0]
+
+    def detect_batch(self, frames: List[np.ndarray]) -> List[List[dict]]:
+        """对一批帧执行检测，摊薄每帧的 Python/GPU 同步开销。"""
+        if not frames:
+            return []
+
         results = self.model(
-            frame,
+            frames,
             imgsz=self.img_size,
             conf=self.conf_threshold,
             iou=self.iou_threshold,
@@ -56,22 +63,25 @@ class VehicleDetector:
             half=self.half,
             verbose=False,
         )
+        return [self._parse_result(result) for result in results]
 
+    @classmethod
+    def _parse_result(cls, result) -> List[dict]:
         detections = []
-        for result in results:
-            if result.boxes is None:
-                continue
-            boxes = result.boxes.xyxy.cpu().numpy()
-            confs = result.boxes.conf.cpu().numpy()
-            cls_ids = result.boxes.cls.cpu().numpy().astype(int)
+        if result.boxes is None:
+            return detections
 
-            for bbox, conf, cls_id in zip(boxes, confs, cls_ids):
-                detections.append({
-                    "bbox": bbox.astype(int).tolist(),
-                    "confidence": float(conf),
-                    "class_id": int(cls_id),
-                    "class_name": self.VEHICLE_CLASSES.get(cls_id, "unknown"),
-                })
+        boxes = result.boxes.xyxy.cpu().numpy()
+        confs = result.boxes.conf.cpu().numpy()
+        cls_ids = result.boxes.cls.cpu().numpy().astype(int)
+
+        for bbox, conf, cls_id in zip(boxes, confs, cls_ids):
+            detections.append({
+                "bbox": bbox.astype(int).tolist(),
+                "confidence": float(conf),
+                "class_id": int(cls_id),
+                "class_name": cls.VEHICLE_CLASSES.get(cls_id, "unknown"),
+            })
 
         return detections
 

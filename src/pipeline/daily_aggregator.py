@@ -275,12 +275,17 @@ class DailyAggregator:
             "freq_count_24h": first.get("freq_count_24h", 0),
             "aggregation_index": max(self._as_float(v.get("aggregation_index", 0)) for v in group),
             "nearest_vehicle_m": min(self._as_float(v.get("nearest_vehicle_m", -1)) for v in group),
+            "max_concurrent_vehicles": max(self._as_int(v.get("max_concurrent_vehicles", 1)) for v in group),
             "trajectory_points": first.get("trajectory_points", ""),
             "reid_embedding": first.get("reid_embedding", []),
             "segment_count": len(group),
             "anomaly_score": first.get("anomaly_score", 0),
             "is_anomaly": first.get("is_anomaly", 0),
             "alert_reason": first.get("alert_reason", ""),
+            "iforest_score": first.get("iforest_score", 0),
+            "iforest_anomaly": first.get("iforest_anomaly", 0),
+            "traj_residual": first.get("traj_residual", 0),
+            "traj_anomaly": first.get("traj_anomaly", 0),
         }
 
         return merged

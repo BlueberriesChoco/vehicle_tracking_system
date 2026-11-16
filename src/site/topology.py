@@ -51,6 +51,16 @@ class SiteTopology:
             return None
         return self.zones.get(camera.get("zone_id"))
 
+    def get_edge(self, from_camera_id: str, to_camera_id: str) -> Optional[dict]:
+        """返回两台摄像头之间的拓扑边（含通行时间窗口）。"""
+        for edge in self.edges:
+            if (
+                edge.get("from_camera_id") == from_camera_id
+                and edge.get("to_camera_id") == to_camera_id
+            ):
+                return edge
+        return None
+
     def validate(self) -> List[str]:
         """Return config consistency errors; empty list means valid."""
         errors = []

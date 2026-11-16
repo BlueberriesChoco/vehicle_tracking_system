@@ -68,9 +68,8 @@ class BehaviorVectorizer:
         self.frame_rate = frame_rate
 
         # 各特征提取器
-        self.speed_extractor = SpeedFeatureExtractor(
-            scene_geometry, frame_rate, dwell_threshold_ms
-        )
+        # 注意：dwell_threshold_ms 只属于 DwellFeatureExtractor；速度提取器不需要它。
+        self.speed_extractor = SpeedFeatureExtractor(scene_geometry, frame_rate)
         self.dwell_extractor = DwellFeatureExtractor(
             dwell_threshold_ms, dwell_min_duration_sec, frame_rate
         )
@@ -124,8 +123,10 @@ class BehaviorVectorizer:
         path_features = self.path_extractor.extract(centers_smooth)
 
         # 5. 时间特征
-        enter_time = tracklet.first_seen_time or datetime.now()
-        exit_time = tracklet.last_seen_time or datetime.now()
+        # 防御性回退：不能用 datetime.now()，否则同一段录像在不同时间运行会得到不同的夜间判定
+        placeholder_time = datetime(2000, 1, 1, 12, 0, 0)
+        enter_time = tracklet.first_seen_time or placeholder_time
+        exit_time = tracklet.last_seen_time or placeholder_time
         temporal_features = self.temporal_extractor.extract(enter_time, exit_time)
 
         # 6. 高频通行指数
@@ -224,6 +225,7 @@ class BehaviorVectorizer:
             "avg_speed_ms": speed_features["avg_speed_ms"],
             "max_speed_ms": speed_features["max_speed_ms"],
             "speed_variance": speed_features["speed_variance"],
+            "speed_cv": speed_features["speed_cv"],
 
             # 停留特征
             "max_dwell_sec": dwell_features["max_dwell_sec"],
@@ -245,6 +247,8 @@ class BehaviorVectorizer:
             # 聚集特征
             "aggregation_index": aggregation_features["aggregation_index"],
             "nearest_vehicle_m": aggregation_features["nearest_vehicle_m"],
+            # 研究要点一要求：该车通行期间画面内同时出现的最大车辆数（场景级上下文特征）
+            "max_concurrent_vehicles": aggregation_features["max_concurrent_vehicles"],
 
             # 轨迹点串
             "trajectory_points": self._serialize_trajectory(centers_smooth),

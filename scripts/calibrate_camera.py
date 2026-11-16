@@ -28,7 +28,6 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import cv2
-import numpy as np
 import yaml
 
 

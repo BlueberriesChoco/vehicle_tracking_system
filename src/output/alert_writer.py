@@ -23,10 +23,16 @@ class AlertWriter:
         "plate_number",
         "plate_confidence",
         "baseline_feature_count",
+        "iforest_score",
+        "iforest_anomaly",
+        "traj_residual",
+        "traj_anomaly",
     ]
 
     def write(self, records: Iterable[dict], filepath: str, anomaly_only: bool = True) -> None:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        output_dir = os.path.dirname(filepath)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         rows = [self._row(record, index) for index, record in enumerate(records)]
         if anomaly_only:
             rows = [row for row in rows if str(row.get("is_anomaly", "0")) in {"1", "true", "True"}]
@@ -56,6 +62,10 @@ class AlertWriter:
             "plate_number": record.get("plate_number", ""),
             "plate_confidence": record.get("plate_confidence", ""),
             "baseline_feature_count": record.get("baseline_feature_count", ""),
+            "iforest_score": record.get("iforest_score", ""),
+            "iforest_anomaly": record.get("iforest_anomaly", ""),
+            "traj_residual": record.get("traj_residual", ""),
+            "traj_anomaly": record.get("traj_anomaly", ""),
         }
 
     @staticmethod

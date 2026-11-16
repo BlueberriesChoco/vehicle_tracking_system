@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime
 
 
 class TemporalFeatureExtractor:
@@ -57,8 +57,10 @@ class TemporalFeatureExtractor:
                     minute=0, second=0, microsecond=0
                 )
                 if current.hour >= self.night_start:
+                    # 从当前小时到次日 night_end，例如 23:00 -> 次日 06:00（7 小时），
+                    # 不能直接用常量 (24 - night_start + night_end)，否则 23:00 会算到 07:00。
                     next_boundary = next_boundary + self._hours_to_timedelta(
-                        24 - self.night_start + self.night_end
+                        24 - current.hour + self.night_end
                     )
                 else:
                     next_boundary = next_boundary.replace(hour=self.night_end)

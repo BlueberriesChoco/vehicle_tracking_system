@@ -9,3 +9,9 @@ zones:
     type: gate
     parent_zone_id: zone_a
     description: "A-zone non-motor vehicle lane entrance."
+
+  - zone_id: zone_a_admin_lane
+    name: "Zone A Admin Lane"
+    type: gate
+    parent_zone_id: zone_a
+    description: "A-zone administrative vehicle lane (entry and exit)."
