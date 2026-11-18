@@ -274,6 +274,26 @@ class BatchProcessor:
         Returns:
             输出的行为向量 CSV 文件路径
         """
+        for _, csv_path in self._process_video_windows(
+            video_path, output_dir, output_video_path, start_frame, name_suffix
+        ):
+            return csv_path
+        raise RuntimeError(f"No vector output for {video_path}")
+
+    def process_video_windows(
+        self, video_path: str, output_dir: str, window_frames: int, max_windows: int = 0,
+    ):
+        """Yield (source start frame, CSV path) for each window of one recording."""
+        if window_frames <= 0 or max_windows < 0:
+            raise ValueError("Expected positive window_frames and non-negative max_windows")
+        yield from self._process_video_windows(
+            video_path, output_dir, None, 0, "", window_frames, max_windows
+        )
+
+    def _process_video_windows(
+        self, video_path, output_dir, output_video_path, start_frame, name_suffix,
+        window_frames=0, max_windows=0,
+    ):
         self.logger.info(f"Processing video: {video_path}")
         self.pipeline.reset()
 
@@ -283,11 +303,6 @@ class BatchProcessor:
 
         # 从视频文件名推断日期和小时，用于稳定生成输出目录和文件名
         date_str, hour_str = self._parse_video_datetime(video_name)
-
-        vector_output_dir = os.path.join(
-            output_dir, "vectors", camera_id, date_str
-        )
-        os.makedirs(vector_output_dir, exist_ok=True)
 
         # 打开视频
         cap = FrameReader.open(video_path)
@@ -330,52 +345,63 @@ class BatchProcessor:
         if self.prefetch_frames > 0:
             reader = ThreadedFrameReader(cap, queue_size=self.prefetch_frames)
             self.logger.info(f"Decode prefetch enabled (queue={self.prefetch_frames})")
-        while True:
-            ret, frame = reader.read() if reader is not None else cap.read()
-            if not ret:
-                break
+        window_index = 0
+        emitted = 0
+        frame_limit = window_frames * max_windows if window_frames else self.max_frames
 
-            frame_count += 1
-
-            # 跳帧
-            if frame_count % self.frame_skip != 0:
-                continue
-
-            # 最大帧数限制
-            if self.max_frames > 0 and frame_count > self.max_frames:
-                break
-
-            # 处理帧
-            timestamp = video_start_time + timedelta(
-                seconds=(start_frame + frame_count - 1) / source_fps
+        def write_window():
+            nonlocal emitted
+            vectors = self.pipeline.completed_vectors[emitted:]
+            directory = os.path.join(output_dir, f"window_{window_index:03d}") if window_frames else output_dir
+            path = self._write_video_outputs(
+                vectors, directory, camera_id, date_str, hour_str,
+                name_suffix, video_start_time, time_known,
             )
-            batch_frames.append(frame)
-            batch_timestamps.append(timestamp)
-            if len(batch_frames) >= batch_size:
-                self._flush_batch(batch_frames, batch_timestamps, video_writer)
+            emitted += len(vectors)
+            return start_frame + window_index * window_frames, path
 
-            # 进度
-            if frame_count % 100 == 0:
-                self.logger.info(
-                    f"Frame {frame_count}/{total_frames}, "
-                    f"completed vectors: {len(self.pipeline.completed_vectors)}"
+        try:
+            while not frame_limit or frame_count < frame_limit:
+                ret, frame = reader.read() if reader is not None else cap.read()
+                if not ret:
+                    break
+                # Read ahead by one frame so an exact-boundary EOF finalizes the last window.
+                if window_frames and frame_count and frame_count % window_frames == 0:
+                    self._flush_batch(batch_frames, batch_timestamps, video_writer)
+                    yield write_window()
+                    window_index += 1
+
+                frame_count += 1
+                if frame_count % self.frame_skip != 0:
+                    continue
+                timestamp = video_start_time + timedelta(
+                    seconds=(start_frame + frame_count - 1) / source_fps
                 )
+                batch_frames.append(frame)
+                batch_timestamps.append(timestamp)
+                if len(batch_frames) >= batch_size:
+                    self._flush_batch(batch_frames, batch_timestamps, video_writer)
+                if frame_count % 100 == 0:
+                    self.logger.info(
+                        f"Frame {frame_count}/{total_frames}, "
+                        f"completed vectors: {len(self.pipeline.completed_vectors)}"
+                    )
 
-        # 收尾前先把最后一批处理完
-        self._flush_batch(batch_frames, batch_timestamps, video_writer)
+            self._flush_batch(batch_frames, batch_timestamps, video_writer)
+            remaining = self.pipeline.finalize()
+            self.logger.info(f"Finalized {len(remaining)} remaining trajectories")
+        finally:
+            if reader is not None:
+                reader.stop()
+            cap.release()
+            if video_writer is not None:
+                video_writer.release()
+        yield write_window()
 
-        # 收尾
-        remaining = self.pipeline.finalize()
-        self.logger.info(f"Finalized {len(remaining)} remaining trajectories")
-
-        if reader is not None:
-            reader.stop()
-        cap.release()
-        if video_writer is not None:
-            video_writer.release()
-
-        # 写出行为向量：每条完成轨迹一行，保留详细特征
-        all_vectors = self.pipeline.completed_vectors
+    def _write_video_outputs(
+        self, all_vectors, output_dir, camera_id, date_str, hour_str,
+        name_suffix, video_start_time, time_known,
+    ):
         # 给每条通行记录一个全局唯一 ID：摄像头 + 录像段起始时间 + track_id
         segment_start = (
             video_start_time.strftime("%Y%m%d%H%M%S") if video_start_time else "unknown"
@@ -389,6 +415,8 @@ class BatchProcessor:
                 vector["night_ratio"] = 0.0
 
         csv_filename = build_vector_filename(camera_id, date_str, hour_str, name_suffix)
+        vector_output_dir = os.path.join(output_dir, "vectors", camera_id, date_str)
+        os.makedirs(vector_output_dir, exist_ok=True)
         csv_path = os.path.join(vector_output_dir, csv_filename)
 
         self.vector_writer.write(all_vectors, csv_path)

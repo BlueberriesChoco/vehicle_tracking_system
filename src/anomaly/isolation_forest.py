@@ -329,6 +329,7 @@ class IsolationForestDetector:
 
         for local, original in enumerate(indices):
             results[original]["iforest_score"] = round(float(scores[local]), 4)
+            results[original]["iforest_available"] = 1
             results[original]["iforest_anomaly"] = int(labels[local] == -1)
 
         return results

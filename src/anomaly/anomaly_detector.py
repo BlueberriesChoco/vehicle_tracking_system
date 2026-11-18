@@ -66,10 +66,12 @@ class AnomalyDetector:
                     reasons.extend(baseline_result["baseline_reasons"])
 
             # 无监督异常指数 A：仅对分析对象生效
+            record["iforest_available"] = 0
             if iforest_results is not None:
                 iforest_record = iforest_results[index]
                 record["iforest_score"] = iforest_record.get("iforest_score", 0.0)
                 record["iforest_anomaly"] = iforest_record.get("iforest_anomaly", 0)
+                record["iforest_available"] = int(is_target and bool(iforest_record.get("iforest_available")))
                 if is_target and record["iforest_anomaly"]:
                     reasons.append(f"iforest_score={record['iforest_score']:.2f}")
             else:
@@ -77,10 +79,12 @@ class AnomalyDetector:
                 record.setdefault("iforest_anomaly", 0)
 
             # 轨迹预测残差：仅对分析对象生效
+            record["trajectory_available"] = 0
             if traj_results is not None:
                 traj_record = traj_results[index]
                 record["traj_residual"] = traj_record.get("traj_residual", 0.0)
                 record["traj_anomaly"] = traj_record.get("traj_anomaly", 0)
+                record["trajectory_available"] = int(is_target and "traj_residual_zscore" in traj_record)
                 if is_target and record["traj_anomaly"]:
                     reasons.append(f"traj_residual={record['traj_residual']:.1f}px")
             else:

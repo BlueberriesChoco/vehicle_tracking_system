@@ -4,6 +4,19 @@ import numpy as np
 
 from src.behavior.features.aggregation_feature import AggregationFeatureExtractor
 from src.behavior.features.dwell_feature import DwellFeatureExtractor
+
+
+def test_dwell_counts_sample_time_and_excludes_missing_frames():
+    from datetime import datetime, timedelta
+
+    origin = datetime(2026, 1, 1)
+    timestamps = [origin + timedelta(seconds=t) for t in (0, 1, 3.25, 10, 11)]
+    result = DwellFeatureExtractor(frame_rate=25).extract(
+        [0.1, 0.1, 0.1, 0.1], timestamps, [0, 1, 2, 5, 6]
+    )
+    assert result["max_dwell_sec"] == 3.25
+    assert result["stop_count"] == 1
+    assert result["dwell_ratio"] == 0.7647
 from src.behavior.features.speed_feature import SpeedFeatureExtractor
 from src.trajectory.scene_geometry import SceneGeometry
 

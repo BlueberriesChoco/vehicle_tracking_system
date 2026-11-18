@@ -18,14 +18,14 @@
 | 2 | 跨摄像头 Re-ID≥90% | 🟠 | 自动构造同车/异车对（无需标注），算 AUC/EER | `python scripts/eval_reid_pairs.py --video <h264> --min-gap 25` → **AUC 0.794**（含属性先验 0.827） |
 | 3 | 轨迹拼接完整率≥88% | 🟡 | 需要双机位同车真值 | `python scripts/stitch_cameras.py --from-vectors ... --to-vectors ...` → `match_count` |
 | 4 | 速度误差≤±5 km/h | 🟡 | 需要地面控制点；当前 `speed_reliable=0` | `python scripts/calibrate_homography.py --pixels ... --world ...`；`python scripts/audit_rules.py` 看 `speed_reliable` |
-| 5 | 停留时间误差≤±3 秒 | ✅ | 基于真实时间戳，与标定无关 | `tests/test_features.py::test_dwell_detected_for_long_stop`（80 帧 = 3.2s） |
+| 5 | 停留时间误差≤±3 秒 | 🟡 | 由连续低速观测的时间差累计 | 单元测试验证计算，现场误差需人工标注起止时间 |
 
 ## 二、个体行为异常检测
 
 | # | 指标 | 状态 | 验证方式 | 产物 / 命令 |
 |---|---|---|---|---|
 | 6 | Transformer 3 秒位移误差≤2 米 | 🟡 | 按 50 px/m 估算各视野误差 | 0.2s→**0.21 m**；1.0s→**1.22 m**（81.6% ≤2m）；3s 无法评估（轨迹中位数 1.84s） |
-| 7 | A 召回≥80%、误报≤15% | 🟡 | **误报率可算**：告警数 / 车辆数 | `python scripts/report_metrics.py --root $ROOT` → **9.23%**；合成 9.49% |
+| 7 | A 召回≥80%、误报≤15% | 🟡 | 召回和 FPR 需独立标注。9.23% 为告警率 | `scripts/eval_with_labels.py` 输出 FP、TN、FPR、特异度和标注覆盖率 |
 | 8 | 已知异常类型检出≥85% | ✅ | 合成注入四类异常 | `python scripts/synthetic_anomaly_eval.py --input <csv> --output <json>` → 四类均 **100%** |
 | 9 | 未知异常泛化 AUC≥0.85 | 🔴 | 无异常标注 | 需 `eval_with_labels.py` + 真实违规标签 |
 

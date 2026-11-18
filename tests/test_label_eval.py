@@ -8,6 +8,7 @@
 """
 
 import csv
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -53,6 +54,9 @@ def test_partial_labels_do_not_count_unlabeled_as_negatives(tmp_path):
     assert data["labeled_vehicles"] == 40
     assert data["labels_unmatched"] == 0
     assert data["positives"] + data["negatives"] == 40
+    assert data["label_match_rate"] == 1
+    assert data["vector_label_coverage"] < 1
+    assert data["alert"]["false_positive_rate"] == round(data["alert"]["fp"] / 34, 4)
 
 
 def test_unmatched_labels_are_reported_not_silently_dropped(tmp_path):
@@ -75,3 +79,26 @@ def test_unmatched_labels_are_reported_not_silently_dropped(tmp_path):
     assert data["labels_provided"] == 12
     assert data["labels_unmatched"] == 4
     assert data["labeled_vehicles"] == 8
+
+
+def test_evaluate_risk_report_preserves_available_scores(tmp_path):
+    labels = tmp_path / "labels.csv"
+    _write_labels(labels, [("a", 1), ("b", 0)])
+    report = tmp_path / "risk.json"
+    report.write_text(json.dumps({"vehicles": [
+        {"passage_id": "a", "is_anomaly": 1, "risk_score_100": 90,
+         "iforest_anomaly": 1, "iforest_available": 1, "iforest_score": 0.9},
+        {"passage_id": "b", "is_anomaly": 0, "risk_score_100": 10,
+         "iforest_anomaly": 0, "iforest_available": 0, "iforest_score": 0},
+    ]}), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "scripts/eval_with_labels.py", "--risk-report", str(report),
+         "--labels", str(labels)],
+        cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["auc"]["risk_score"] == 1
+    assert data["score_sample_counts"]["iforest_score"] == 1
+    assert data["models"]["iforest_anomaly"]["false_positive_rate"] is None
+    assert data["high_risk"]["precision"] == 1

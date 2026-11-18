@@ -117,7 +117,9 @@ class BehaviorVectorizer:
         )
 
         # 3. 停留特征
-        dwell_features = self.dwell_extractor.extract(speed_features["instant_speeds"])
+        dwell_features = self.dwell_extractor.extract(
+            speed_features["instant_speeds"], tracklet.timestamps, tracklet.frame_indices
+        )
 
         # 4. 路径特征
         path_features = self.path_extractor.extract(centers_smooth)

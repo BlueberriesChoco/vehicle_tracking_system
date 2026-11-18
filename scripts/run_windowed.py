@@ -3,8 +3,7 @@
 
 Splits a long recording into fixed-size windows, runs the full chain
 (vectorize -> detect -> graph -> risk report) per window, and writes one report
-per window. A vehicle is reported at the end of its window instead of waiting
-for the whole recording, which keeps latency bounded.
+per window. Tracks stay active across windows and enter reports after completion.
 
 Usage:
     python scripts/run_windowed.py \
@@ -15,7 +14,6 @@ Usage:
 """
 
 import argparse
-import glob
 import json
 import os
 import subprocess
@@ -40,13 +38,6 @@ def run_command(command):
         raise RuntimeError(f"exit code {completed.returncode}")
 
 
-def find_vectors(window_dir, camera):
-    pattern = os.path.join(window_dir, "vectors", camera, "**", "vec_*.csv")
-    # 必须排序：glob 的返回顺序依赖文件系统，否则“取第一个”会不稳定
-    matches = sorted(glob.glob(pattern, recursive=True))
-    return matches[0] if matches else None
-
-
 def count_vector_rows(csv_path):
     """统计向量 CSV 的数据行数（不含表头）。
 
@@ -68,6 +59,9 @@ def main():
     parser.add_argument("--max-windows", type=int, default=0, help="0 = all")
     parser.add_argument("--output", default="data/outputs/windowed")
     parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--iforest", help="Pretrained Isolation Forest JSON")
+    parser.add_argument("--trajectory-model", help="Pretrained Transformer checkpoint prefix")
+    parser.add_argument("--gae-model", help="Pretrained GAE checkpoint prefix")
     args = parser.parse_args()
 
     if not os.path.exists(args.video):
@@ -87,56 +81,25 @@ def main():
         camera_config_path=f"config/camera/{args.camera}.yaml",
     )
     processor.detector.device = args.device
-    processor.max_frames = window_frames
-
-    references = os.path.join(args.output, "references")
-    os.makedirs(references, exist_ok=True)
-    iforest_path = os.path.join(references, "iforest.json")
-    traj_prefix = os.path.join(references, "traj")
-
     python = sys.executable
     results = []
-    window_index = 0
 
-    for start in range(0, total_frames, window_frames):
-        if args.max_windows and window_index >= args.max_windows:
-            break
-
+    started = time.perf_counter()
+    windows = processor.process_video_windows(args.video, args.output, window_frames, args.max_windows)
+    for window_index, (start, vector_csv) in enumerate(windows):
         window_dir = os.path.join(args.output, f"window_{window_index:03d}")
-        os.makedirs(window_dir, exist_ok=True)
-        started = time.perf_counter()
-
-        processor.process_video(args.video, window_dir, start_frame=start)
-        vector_csv = find_vectors(window_dir, args.camera)
         row_count = count_vector_rows(vector_csv)
         if row_count == 0:
             logger.warning("Window %s produced no vehicles; skipping", window_index)
-            results.append({"window": window_index, "start_frame": start, "vehicles": 0})
-            window_index += 1
+            results.append({
+                "window": window_index,
+                "start_frame": start,
+                "start_sec": round(start / fps, 1),
+                "vehicles": 0,
+                "latency_sec": round(time.perf_counter() - started, 1),
+            })
+            started = time.perf_counter()
             continue
-
-        # 首次窗口顺带训练模型，后续窗口复用。
-        # 只有 1–2 辆车时样本不足，训练会失败——此时不训练，本窗及后续窗口
-        # 只用规则引擎与统计基线，而不是让整段录像崩掉。
-        if window_index == 0:
-            if row_count >= 3:
-                try:
-                    run_command([python, "scripts/train_iforest.py", "--input", vector_csv, "--output", iforest_path])
-                except RuntimeError as exc:
-                    logger.warning("Isolation Forest 训练失败（%s），本段仅用规则检测", exc)
-                if os.path.exists(iforest_path):
-                    try:
-                        run_command([
-                            python, "scripts/train_transformer.py", "--input", vector_csv,
-                            "--output", traj_prefix, "--epochs", "20", "--device", "cpu",
-                        ])
-                    except RuntimeError as exc:
-                        logger.warning("Transformer 训练失败（%s），仅用 IF 与规则", exc)
-            else:
-                logger.warning(
-                    "First window has only %s vehicles; skipping model training (rule engine only)",
-                    row_count,
-                )
 
         alerts_dir = os.path.join(window_dir, "alerts")
         os.makedirs(alerts_dir, exist_ok=True)
@@ -146,14 +109,17 @@ def main():
             "--output", os.path.join(alerts_dir, "alerts.csv"),
             "--annotated-vectors", os.path.join(alerts_dir, "vectors.csv"),
         ]
-        if os.path.exists(iforest_path):
-            detection_cmd += ["--iforest", iforest_path]
-        if os.path.exists(traj_prefix + ".pt"):
-            detection_cmd += ["--trajectory-model", traj_prefix]
+        if args.iforest:
+            detection_cmd += ["--iforest", args.iforest]
+        if args.trajectory_model:
+            detection_cmd += ["--trajectory-model", args.trajectory_model]
         run_command(detection_cmd)
         graph_path = os.path.join(window_dir, "graph.json")
-        run_command([python, "scripts/build_graph.py", "--input", os.path.join(alerts_dir, "vectors.csv"),
-                     "--output", graph_path, "--top-k", "3"])
+        graph_cmd = [python, "scripts/build_graph.py", "--input", os.path.join(alerts_dir, "vectors.csv"),
+                     "--output", graph_path, "--top-k", "3"]
+        if args.gae_model:
+            graph_cmd += ["--gae-model", args.gae_model]
+        run_command(graph_cmd)
         risk_json = os.path.join(window_dir, "risk.json")
         risk_md = os.path.join(window_dir, "risk.md")
         run_command([python, "scripts/build_risk_report.py",
@@ -174,7 +140,7 @@ def main():
         })
         print(f"[window {window_index}] frames {start}-{start + window_frames} "
               f"vehicles={risk.get('vehicle_count')} latency={elapsed:.1f}s", flush=True)
-        window_index += 1
+        started = time.perf_counter()
 
     summary = {
         "video": args.video,

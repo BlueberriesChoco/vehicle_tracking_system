@@ -14,7 +14,7 @@ Usage:
 Steps:
     1. .mbf -> .h264 (if needed)
     2. detection / tracking / trajectory / behavior vectors
-    3. Isolation Forest + Transformer trajectory predictor (train if missing)
+    3. Load explicitly supplied Isolation Forest and Transformer models
     4. anomaly detection (rules + baseline + A + trajectory residual)
     5. relation graph + Louvain + graph anomaly index G
     6. risk fusion R = αA + βG + γT + evidence chain + report
@@ -65,8 +65,8 @@ def ensure_h264(video_path: str) -> str:
 from src.utils.vectors_io import load_vector_rows as load_vectors
 
 
-def build_graph_and_index(rows, output_path, top_k=3):
-    payload = build_graph_payload(rows, config=RelationConfig(top_k=top_k))
+def build_graph_and_index(rows, output_path, top_k=3, gae_model=None):
+    payload = build_graph_payload(rows, config=RelationConfig(top_k=top_k), gae_model=gae_model)
     if payload is None:
         return None
     out_dir = os.path.dirname(output_path)
@@ -85,7 +85,10 @@ def main():
     parser.add_argument("--output", default="data/outputs", help="Output root")
     parser.add_argument("--max-frames", type=int, default=0, help="Max frames per video (0 = all)")
     parser.add_argument("--device", type=int, default=0, help="GPU id (-1 = CPU)")
-    parser.add_argument("--retrain", action="store_true", help="Force retraining IF and Transformer")
+    parser.add_argument("--retrain", action="store_true", help="Demo only: train on the scoring batch")
+    parser.add_argument("--iforest", help="Pretrained Isolation Forest JSON")
+    parser.add_argument("--trajectory-model", help="Pretrained Transformer checkpoint prefix")
+    parser.add_argument("--gae-model", help="GAE checkpoint prefix trained on an independent baseline graph")
     parser.add_argument("--contamination", type=float, default=None,
                         help="Expected anomaly fraction; default comes from camera config, else 0.05")
     parser.add_argument("--max-alert-rate", type=float, default=0.0,
@@ -96,6 +99,8 @@ def main():
     parser.add_argument("--gamma", type=float, default=0.25)
     parser.add_argument("--llm-endpoint", default=None, help="Optional local LLM endpoint")
     args = parser.parse_args()
+    if args.retrain and (args.iforest or args.trajectory_model):
+        parser.error("--retrain cannot be combined with pretrained individual anomaly models")
 
     outputs = args.output
     references = os.path.join(outputs, "references")
@@ -150,15 +155,14 @@ def main():
     for key in hour_keys:
         hour_counts[key] = hour_counts.get(key, 0) + 1
     seen = {}
+    rows = []
     for source, key in zip(sources, hour_keys):
         suffix = ""
         if hour_counts[key] > 1:
             seen[key] = seen.get(key, 0) + 1
             suffix = f"{seen[key]:02d}"
-        processor.process_video(video_path=source, output_dir=outputs, name_suffix=suffix)
-
-    camera_vector_dir = os.path.join(outputs, "vectors", args.camera)
-    rows = load_vectors(camera_vector_dir)
+        vector_path = processor.process_video(video_path=source, output_dir=outputs, name_suffix=suffix)
+        rows.extend(load_vectors(vector_path))
     if not rows:
         logger.error("No vectors produced.")
         sys.exit(1)
@@ -168,8 +172,8 @@ def main():
 
     # ---- 3. 训练无监督模型 ----
     # 短片段可能凑不够训练样本，此时跳过模型、仅保留规则检测，避免整条链路失败
-    can_train = len(target_rows) >= 3
-    if not can_train:
+    can_train = args.retrain and len(target_rows) >= 3
+    if args.retrain and not can_train:
         logger.warning(
             "Only %s analysis targets; skipping IF/Transformer training (rule engine only)",
             len(target_rows),
@@ -177,30 +181,29 @@ def main():
 
     iforest_path = os.path.join(references, f"iforest_{args.camera}.json")
     traj_prefix = os.path.join(references, f"traj_{args.camera}")
-    use_iforest = False
-    use_traj = False
+    iforest = IsolationForestDetector.load(args.iforest) if args.iforest else None
+    trajectory_model = TrajectoryPredictionDetector.load(args.trajectory_model) if args.trajectory_model else None
     if can_train:
-        if args.retrain or not os.path.exists(iforest_path):
-            try:
-                IsolationForestDetector(contamination=contamination).fit(target_rows).save(iforest_path)
-            except Exception as exc:  # 训练失败不应让整条链路崩掉
-                logger.warning("Isolation Forest training failed (%s); falling back to rules", exc)
-        if args.retrain or not os.path.exists(traj_prefix + ".pt"):
-            # 轨迹窗口需要 past_len + future_len 个点；只有 3 条短轨迹时
-            # fit() 会抛 ValueError，必须捕获后回退到规则引擎
-            try:
-                TrajectoryPredictionDetector(
-                    past_len=5, future_len=5, epochs=30, contamination=contamination
-                ).fit(target_rows).save(traj_prefix)
-            except Exception as exc:
-                logger.warning("Transformer training failed (%s); falling back to rules", exc)
-        use_iforest = os.path.exists(iforest_path)
-        use_traj = os.path.exists(traj_prefix + ".pt")
+        logger.warning("Demo training uses the scoring batch; results are in-sample")
+        try:
+            model = IsolationForestDetector(contamination=contamination).fit(target_rows)
+            model.save(iforest_path)
+            iforest = model
+        except ValueError as exc:
+            logger.warning("Isolation Forest training failed (%s); falling back to rules", exc)
+        try:
+            model = TrajectoryPredictionDetector(
+                past_len=5, future_len=5, epochs=30, contamination=contamination
+            ).fit(target_rows)
+            model.save(traj_prefix)
+            trajectory_model = model
+        except ValueError as exc:
+            logger.warning("Transformer training failed (%s); falling back to rules", exc)
 
     # ---- 4. 异常检测 ----
     detector = AnomalyDetector(
-        iforest=IsolationForestDetector.load(iforest_path) if use_iforest else None,
-        trajectory_predictor=TrajectoryPredictionDetector.load(traj_prefix) if use_traj else None,
+        iforest=iforest,
+        trajectory_predictor=trajectory_model,
         thresholds=anomaly_config.get("rules"),
     )
     detected = detector.detect(rows)
@@ -215,7 +218,8 @@ def main():
 
     # ---- 5. 关系图谱 ----
     graph_payload = build_graph_and_index(
-        detected, os.path.join(outputs, "graphs", f"graph_{args.camera}.json"), top_k=args.top_k
+        detected, os.path.join(outputs, "graphs", f"graph_{args.camera}.json"),
+        top_k=args.top_k, gae_model=args.gae_model,
     )
     detected = apply_graph(detected, graph_payload)
 

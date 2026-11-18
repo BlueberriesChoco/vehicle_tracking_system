@@ -29,6 +29,9 @@ def test_precision_recall_f1():
     assert result["tn"] == 2
     assert result["precision"] == pytest.approx(0.5)
     assert result["recall"] == pytest.approx(0.5)
+    assert result["false_positive_rate"] == pytest.approx(0.3333)
+    assert result["specificity"] == pytest.approx(0.6667)
+    assert precision_recall_f1([1], [1])["false_positive_rate"] is None
 
 
 def test_precision_at_threshold():

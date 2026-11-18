@@ -46,6 +46,9 @@ def main():
     parser.add_argument("--gae", action="store_true", help="(Deprecated) same as --method gae")
     parser.add_argument("--method", choices=["svd", "gae"], default="svd", help="Graph anomaly method (default: svd)")
     parser.add_argument("--gae-epochs", type=int, default=150, help="GAE training epochs")
+    gae_checkpoints = parser.add_mutually_exclusive_group()
+    gae_checkpoints.add_argument("--gae-model", help="Score using a pretrained GAE checkpoint prefix")
+    gae_checkpoints.add_argument("--save-gae-model", help="Fit GAE to baseline input and save checkpoint prefix")
     parser.add_argument("--include-freight", action="store_true", help="Include non ordinary vehicles")
     args = parser.parse_args()
 
@@ -62,7 +65,7 @@ def main():
         min_trajectory_points=args.min_points,
         top_k=args.top_k,
     )
-    method = "gae" if (args.method == "gae" or args.gae) else "svd"
+    method = "gae" if (args.method == "gae" or args.gae or args.save_gae_model) else "svd"
     payload = build_graph_payload(
         rows,
         config=config,
@@ -70,6 +73,8 @@ def main():
         resolution=args.resolution,
         gae_epochs=args.gae_epochs,
         only_analysis_target=not args.include_freight,
+        gae_model=args.gae_model,
+        save_gae_model=args.save_gae_model,
     )
     if payload is None:
         logger.error("No analysable vehicles found.")

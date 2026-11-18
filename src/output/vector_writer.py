@@ -24,6 +24,7 @@ class VectorWriter:
         "reid_embedding",
         "anomaly_score", "is_anomaly", "alert_reason",
         "iforest_score", "iforest_anomaly", "traj_residual", "traj_anomaly",
+        "iforest_available", "trajectory_available",
     ]
 
     def __init__(self, output_format: str = "csv"):

@@ -20,6 +20,8 @@ def build_graph_payload(
     resolution: float = 1.0,
     gae_epochs: int = 150,
     only_analysis_target: bool = True,
+    gae_model: Optional[str] = None,
+    save_gae_model: Optional[str] = None,
 ) -> Optional[dict]:
     """构建图谱 JSON 载荷；没有可分析车辆时返回 None。"""
     config = config or RelationConfig()
@@ -28,13 +30,17 @@ def build_graph_payload(
         return None
 
     membership = louvain_partition(graph.adjacency, resolution=resolution)
-    if method == "gae":
+    if method == "gae" or gae_model:
         from .gae import GraphAutoencoderDetector
 
-        detector = GraphAutoencoderDetector(epochs=gae_epochs)
-        detector.fit(graph.adjacency)
+        if gae_model:
+            detector = GraphAutoencoderDetector.load(gae_model)
+        else:
+            detector = GraphAutoencoderDetector(epochs=gae_epochs).fit(graph.adjacency)
+            if save_gae_model:
+                detector.save(save_gae_model)
         scores = detector.score(graph.adjacency)
-        method_name = "gae"
+        method_name = "gae_baseline" if gae_model else "gae"
     else:
         scores = graph_anomaly_index(graph.adjacency, community=membership)
         method_name = "low_rank_svd"
