@@ -43,6 +43,40 @@
 
 ## 2026-11-20
 
+### 现场标定配套：可打印记录单 + 测量值转换脚本
+
+#### 修改原因
+
+现场要用两张东西：一张能打印的图（P1–P5 在哪），一张能填的表（5 个距离）。
+原来的 `config/calibration_measurements.csv` 是 Markdown 表格，打印出来不好填；
+而且填完之后没有脚本把 W/g/d3/d4/d5 变成 `calibrate_homography.py` 需要的
+「像素 ↔ 米制」点对，只能手工拼字符串，容易错。
+
+#### 新增
+
+- `scripts/make_calibration_fieldsheet.py` → `docs/calibration_fieldsheet.png`：
+  A4 200dpi 单页，上半是标注图，下半是填写表（W/g/d3/d4/d5 + 两项自检 + 元信息），
+  直接打印即可带去现场。
+- `scripts/calibration_from_measurements.py`：读取填好的表，按
+  「P0 为原点、减速带为 X、路缘石为 Y」换算成 5 组世界坐标，
+  输出 `--pixels`/`--world` 字符串；`--apply` 时直接调用 `calibrate_homography.py --update-config`。
+  含自检：`check_tape` 与 `d5` 相差超过 0.1 米会提示复测。
+
+#### 几何约定（写进脚本 docstring）
+
+```
+P0 = 原点                P1 = (g, 0)        P2 = (g + W, 0)
+P3 = (0, d3)             P4 = (0, d4)       P5 = (0, d5)
+```
+
+该换算假设减速带大致垂直于路缘石；写入后请看重投影误差，
+误差 > 2% 说明假设不成立，需要现场补测角度或加点。
+
+```text
+pytest: 292 passed
+交付检查 5/5
+```
+
 ### 更正「夜间基本无车」的说法：实测约 0.29 辆/分钟
 
 #### 问题
