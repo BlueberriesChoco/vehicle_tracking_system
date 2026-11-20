@@ -287,3 +287,65 @@ def test_plate_missing_returns_404(tmp_path):
             raise AssertionError("没有车牌条时应返回 404")
     finally:
         server.shutdown()
+
+
+def test_plate_override_file_and_post(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+    run_dir = root / "demo_run"
+
+    assert web.save_plate_override(run_dir, "p_high", "苏F·A37622") is True
+    assert web.load_plate_overrides(run_dir)["p_high"] == "苏F·A37622"
+    record = web.vehicle_record(root, run_id, "p_high")
+    assert record["display"]["plate"] == "苏F·A37622"
+    assert record["display"]["plate_confirmed"] is True
+
+    server = web.serve("127.0.0.1", 0, root, allow_runs=True)
+    port = server.server_address[1]
+    try:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/p_high/plate",
+            data=json.dumps({"plate": "苏F·B88888"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read())
+        assert payload["ok"] is True
+        assert web.load_plate_overrides(run_dir)["p_high"] == "苏F·B88888"
+    finally:
+        server.shutdown()
+
+
+def test_plate_post_rejected_when_read_only(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/p_high/plate",
+            data=json.dumps({"plate": "苏F·C00000"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            urllib.request.urlopen(request, timeout=5)
+        except urllib.error.HTTPError as error:
+            assert error.code == 403
+        else:
+            raise AssertionError("只读模式应拒绝写车牌")
+    finally:
+        server.shutdown()
+
+
+def test_review_sort_modes(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+
+    by_risk = web.review_rows(root, run_id, budget=2, sort="risk")
+    by_behavior = web.review_rows(root, run_id, budget=2, sort="behavior")
+
+    assert by_risk[0]["passage_id"] == "p_high"
+    assert by_behavior[0]["passage_id"] == "p_high"
+    assert "parts" in by_risk[0]

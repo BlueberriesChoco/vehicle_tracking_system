@@ -160,6 +160,69 @@ def build_reasons(record: dict) -> List[dict]:
     return output
 
 
+def score_parts(record: dict) -> dict:
+    """把综合分拆成 A/G/T 三个来源，供界面显示"分从哪来"。"""
+    components = record.get("risk_components") or {}
+    weights = {"A": float(components.get("alpha", 0.4) or 0.4),
+               "G": float(components.get("beta", 0.35) or 0.35),
+               "T": float(components.get("gamma", 0.25) or 0.25)}
+    values = {"A": float(components.get("A", 0) or 0),
+              "G": float(components.get("G", 0) or 0),
+              "T": float(components.get("T", 0) or 0)}
+    points = {key: round(100 * weights[key] * values[key], 1) for key in values}
+    total = round(sum(points.values()), 1)
+    shares = {key: (round(100 * points[key] / total) if total else 0) for key in points}
+    return {"points": points, "shares": shares, "total": total, "values": values}
+
+
+def load_plate_overrides(run_dir: Path) -> dict:
+    """人工确认的车牌（crops/plates.csv：passage_id,plate）。
+
+    机器 OCR 在这条车道上不可靠（车牌约 90px），因此留一个「人工确认一次、
+    系统记住」的入口：填了这张表，界面就显示真实车牌，并可继续用作身份键。
+    """
+    path = run_dir / "crops" / "plates.csv"
+    if not path.is_file():
+        return {}
+    mapping = {}
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            key = str(row.get("passage_id", "") or "").strip()
+            plate = str(row.get("plate", "") or "").strip()
+            if key and plate:
+                mapping[key] = plate
+    return mapping
+
+
+def save_plate_override(run_dir: Path, passage_id: str, plate: str) -> bool:
+    """把人工确认的车牌写入 crops/plates.csv（就地更新已有行）。"""
+    plate = str(plate or "").strip()
+    if not passage_id or not plate:
+        return False
+    path = run_dir / "crops" / "plates.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    if path.is_file():
+        with open(path, encoding="utf-8-sig", newline="") as handle:
+            rows = [row for row in csv.DictReader(handle) if row.get("passage_id")]
+    replaced = False
+    for row in rows:
+        if row["passage_id"] == passage_id:
+            row["plate"] = plate
+            replaced = True
+            break
+    if not replaced:
+        rows.append({"passage_id": passage_id, "plate": plate, "note": "人工确认"})
+
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["passage_id", "plate", "note"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in writer.fieldnames})
+    return True
+
+
 def camera_calibrated(camera: str) -> bool:
     """摄像头配置里是否有未注释的 homography。"""
     config = ROOT / "config" / "camera" / f"{camera}.yaml"
@@ -295,7 +358,7 @@ def run_detail(root: Path, run_id: str) -> Optional[dict]:
     return detail
 
 
-def review_rows(root: Path, run_id: str, budget: int = 20) -> Optional[List[dict]]:
+def review_rows(root: Path, run_id: str, budget: int = 20, sort: str = "risk") -> Optional[List[dict]]:
     from src.report.review_list import build_rows, rank_vehicles
 
     run_dir = find_run_dir(root, run_id)
@@ -303,17 +366,31 @@ def review_rows(root: Path, run_id: str, budget: int = 20) -> Optional[List[dict
         return None
     risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
     vehicles = risk.get("vehicles", []) if isinstance(risk, dict) else []
-    selected = rank_vehicles(vehicles, budget=budget)
+
+    # 三种排序口径：综合 R（默认）、个体行为 A、轨迹预测残差
+    if sort == "behavior":
+        ordered = sorted(vehicles, key=lambda r: -float((r.get("risk_components") or {}).get("A", 0) or 0))
+    elif sort == "trajectory":
+        ordered = sorted(vehicles, key=lambda r: -float(r.get("traj_residual", 0) or 0))
+    else:
+        ordered = rank_vehicles(vehicles, budget=0)
+    selected = ordered[:budget] if budget > 0 else ordered
+
     rows = build_rows(selected)
 
-    # 列表里的「主要原因」用一句话结论；CSV 导出保留原始证据文本用于审计
+    # 列表里的「主要原因」用一句话结论；同时附上分数构成
     plain = {}
+    parts = {}
     for record in selected:
-        plain[str(record.get("passage_id", ""))] = build_headline(record)
+        key = str(record.get("passage_id", ""))
+        plain[key] = build_headline(record)
+        parts[key] = score_parts(record)
     for row in rows:
         key = str(row.get("passage_id", ""))
         if key in plain:
             row["reason"] = plain[key]
+        if key in parts:
+            row["parts"] = parts[key]
     return rows
 
 
@@ -324,13 +401,14 @@ def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
     if run_dir is None:
         return None
     risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
+    overrides = load_plate_overrides(run_dir)
     for record in risk.get("vehicles", []) or []:
         if str(record.get("passage_id", "")) == passage_id:
             enriched = dict(record)
             camera = str(record.get("camera_id", "") or "")
             plate = str(record.get("plate_number", "") or "").strip()
+            confirmed = overrides.get(passage_id, "")
 
-            # 车牌条与 OCR 提示来自 crops/index.json（make_vehicle_thumbnails.py 生成）
             crop_entry = {}
             index_path = run_dir / "crops" / "index.json"
             if index_path.is_file():
@@ -340,9 +418,11 @@ def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
                 except (json.JSONDecodeError, OSError):
                     crop_entry = {}
 
+            display_name_value = confirmed or plate or display_name(record)
             enriched["display"] = {
-                "name": display_name(record),
-                "plate": plate,
+                "name": display_name_value,
+                "plate": confirmed or plate,
+                "plate_confirmed": bool(confirmed),
                 "plate_text": crop_entry.get("plate_text", ""),
                 "plate_conf": crop_entry.get("plate_conf", 0),
                 "has_plate_image": bool(crop_entry.get("plate_file")),
@@ -353,6 +433,7 @@ def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
                 "headline": build_headline(record),
                 "reasons": build_reasons(record),
                 "reason_texts": reasons(record),
+                "parts": score_parts(record),
             }
             return enriched
     return None
@@ -521,7 +602,8 @@ class ConsoleHandler(BaseHTTPRequestHandler):
                 return self._json(detail) if detail else self._json({"error": "run not found"}, 404)
             if len(parts) == 4 and parts[3] == "review":
                 budget = int(query.get("budget", ["20"])[0])
-                rows = review_rows(self.root, run_id, budget=budget)
+                sort = query.get("sort", ["risk"])[0]
+                rows = review_rows(self.root, run_id, budget=budget, sort=sort)
                 return self._json(rows) if rows is not None else self._json({"error": "run not found"}, 404)
             if len(parts) == 5 and parts[3] == "vehicles":
                 record = vehicle_record(self.root, run_id, parts[4])
@@ -548,6 +630,24 @@ class ConsoleHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        parts = [part for part in parsed.path.split("/") if part]
+
+        # 人工确认车牌：POST /api/runs/{id}/vehicles/{pid}/plate  {"plate": "苏F·DZ8777"}
+        if len(parts) == 6 and parts[:2] == ["api", "runs"] and parts[3] == "vehicles" and parts[5] == "plate":
+            if not self.allow_runs:
+                return self._json({"error": "只读模式；启动时加 --allow-runs 才能保存"}, 403)
+            length = int(self.headers.get("Content-Length", "0") or 0)
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError:
+                return self._json({"error": "invalid json"}, 400)
+            run_dir = find_run_dir(self.root, parts[2])
+            if run_dir is None:
+                return self._json({"error": "run not found"}, 404)
+            ok = save_plate_override(run_dir, parts[4], payload.get("plate", ""))
+            return self._json({"ok": ok, "plate": str(payload.get("plate", "")).strip()}) if ok \
+                else self._json({"error": "plate is required"}, 400)
+
         if parsed.path != "/api/runs":
             return self._json({"error": "not found"}, 404)
         if not self.allow_runs:

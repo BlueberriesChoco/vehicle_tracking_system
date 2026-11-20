@@ -160,6 +160,46 @@ function renderDetail(record) {
     caption = "车牌未识别，请对照上方放大图人工核对";
   }
   plateBlock.appendChild(el("div", "plate-caption", caption));
+
+  // 没有车牌时给一个人工确认入口：机器读不出，人读一次即可，系统记住
+  if (!display.plate) {
+    const editor = el("div", "plate-edit");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "对照上图填写车牌，如 苏F·DZ8777";
+    input.maxLength = 12;
+    const save = el("button", "plate-save", "保存");
+    save.type = "button";
+    save.addEventListener("click", async () => {
+      const value = input.value.trim();
+      if (!value) return;
+      save.disabled = true;
+      save.textContent = "保存中";
+      try {
+        const response = await fetch(
+          `/api/runs/${encodeURIComponent(state.activeRun)}/vehicles/${encodeURIComponent(record.passage_id)}/plate`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plate: value }) }
+        );
+        if (response.status === 403) {
+          save.textContent = "只读模式";
+          save.title = "启动服务时加 --allow-runs 才能保存";
+        } else if (response.ok) {
+          await selectVehicle(record.passage_id);
+        } else {
+          save.textContent = "保存失败";
+        }
+      } catch (error) {
+        save.textContent = "保存失败";
+      } finally {
+        save.disabled = false;
+        if (save.textContent === "保存中") save.textContent = "保存";
+      }
+    });
+    editor.appendChild(input);
+    editor.appendChild(save);
+    plateBlock.appendChild(editor);
+  }
+
   body.appendChild(plateBlock);
 
   // 2) 基本信息（不含算法参数）
@@ -174,6 +214,29 @@ function renderDetail(record) {
   facts.appendChild(el("span", "dim", `轨迹 ${record.track_id ?? "—"}`));
   head.appendChild(facts);
   body.appendChild(head);
+
+  // 2.5) 排序分构成：说明分数从哪来，避免把"关系分"当成违规证据
+  const parts = display.parts;
+  if (parts) {
+    const comp = el("div", "score-parts");
+    comp.appendChild(
+      el(
+        "div",
+        "score-parts-title",
+        `排序分 ${parts.total}　=　关系 ${parts.points.G}（${parts.shares.G}%）　+　行为 ${parts.points.A}（${parts.shares.A}%）　+　频次 ${parts.points.T}（${parts.shares.T}%）`
+      )
+    );
+    if (state.detail && state.detail.checks && !state.detail.checks.calibrated) {
+      comp.appendChild(
+        el(
+          "div",
+          "score-caveat",
+          "未标定：速度、路径、聚集特征不可用。「关系分」反映的是与同时段车流的连接结构，不等于违规证据。"
+        )
+      );
+    }
+    body.appendChild(comp);
+  }
 
   // 3) 为什么列为可疑
   body.appendChild(el("h3", "", "为什么列为可疑"));
@@ -238,16 +301,21 @@ async function selectRun(runId) {
   setBanner(status.length ? "提示：本批次为" + status.join("、") + "，结果仅供排查参考，不作为考核结论。" : "");
 
   const budget = Number($("budget").value || 20);
-  const rows = await api(`/api/runs/${encodeURIComponent(runId)}/review?budget=${budget}`);
+  const rows = await api(`/api/runs/${encodeURIComponent(runId)}/review?budget=${budget}&sort=${sortValue()}`);
   renderReview(rows);
 }
 
 async function selectVehicle(passageId) {
   state.activeVehicle = passageId;
-  const rows = await api(`/api/runs/${encodeURIComponent(state.activeRun)}/review?budget=${Number($("budget").value || 20)}`);
+  const rows = await api(`/api/runs/${encodeURIComponent(state.activeRun)}/review?budget=${Number($("budget").value || 20)}&sort=${sortValue()}`);
   renderReview(rows);
   const record = await api(`/api/runs/${encodeURIComponent(state.activeRun)}/vehicles/${encodeURIComponent(passageId)}`);
   renderDetail(record);
+}
+
+function sortValue() {
+  const select = $("sort");
+  return select ? select.value : "risk";
 }
 
 async function boot() {
@@ -264,6 +332,13 @@ async function boot() {
   $("budget").addEventListener("change", async () => {
     if (state.activeRun) await selectRun(state.activeRun);
   });
+
+  const sortSelect = $("sort");
+  if (sortSelect) {
+    sortSelect.addEventListener("change", async () => {
+      if (state.activeRun) await selectRun(state.activeRun);
+    });
+  }
 
   if (state.runs.length) await selectRun(state.runs[0].id);
 }

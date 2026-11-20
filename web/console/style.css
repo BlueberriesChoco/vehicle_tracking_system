@@ -195,6 +195,24 @@ td.evidence { color: var(--muted); font-size: 12px; max-width: 260px; }
   margin-top: 5px;
   text-align: center;
 }
+.plate-edit { display: flex; gap: 6px; margin-top: 6px; }
+.plate-edit input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+.plate-save {
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.plate-save:disabled { opacity: .6; cursor: default; }
 .vehicle-facts { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 
 .headline {
@@ -216,6 +234,16 @@ td.evidence { color: var(--muted); font-size: 12px; max-width: 260px; }
   font-size: 12px;
   padding-top: 1px;
 }
+
+.score-parts {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0 4px;
+}
+.score-parts-title { font-size: 12.5px; color: #334155; font-variant-numeric: tabular-nums; }
+.score-caveat { font-size: 11.5px; color: var(--warn); margin-top: 5px; line-height: 1.55; }
 
 details { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
 details > summary {
