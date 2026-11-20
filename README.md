@@ -728,6 +728,69 @@ python scripts/build_risk_report.py ... --corroboration
 
 新增的 5 辆正是"多信号但图异常低"的个体异常车（89、231、171、273、935）。
 
+## 极少样本场景：待核查清单、抗规避与盲评
+
+违规夹带这类目标一年只有个位数样本、且没有查验台账，因此**不能用"告警率/准确率"来衡量**。
+按下面三个工具使用：
+
+### 1. 待核查清单（排名制，不设异常阈值）
+
+```bash
+python scripts/build_review_list.py \
+  --risk data/outputs/e2e/risk/risk_admin_in.json \
+  --budget 20 \
+  --output data/outputs/review/review_list.csv
+```
+
+输出按可疑度排序的前 N 辆，带证据摘要，**不产生 `is_anomaly` 判定**。
+"每周推荐 20 辆"是预算，不是告警率。
+
+### 2. 抗规避测试（会不会被摸规律绕过）
+
+```bash
+python scripts/eval_perturbation.py \
+  --vectors data/outputs/e2e/alerts/vectors_admin_in.csv \
+  --iforest data/outputs/e2e/references/iforest_admin_in.json \
+  --top-k 20 --output data/outputs/review/perturbation.json
+```
+
+对每个候选施加"司机现实中做得到"的微调（停留 -20%、速度 ±5%、轨迹更平滑等），
+重新打分并比较前 20 名重叠率：
+
+- 重叠高 → 抓的是复合模式，改一点仍在名单里；
+- 重叠低 → 一改就掉出去，容易被规避。
+
+同时输出 `feature_health`：列出 16 个特征里哪些被可靠性门控、哪些恒为常量、
+哪些真正参与打分。**当前未标定机位上只有 2 个特征可用**（通行时长、同屏车数），
+标定后可解锁 7 个（速度 3、路径 2、聚集 2）。
+
+### 3. 盲评导出（没有查验记录时唯一的评估方式）
+
+```bash
+python scripts/export_blind_review.py \
+  --risk data/outputs/e2e/risk/risk_admin_in.json \
+  --n-random 50 --n-top 50 --seed 42 \
+  --out-dir data/outputs/review
+```
+
+生成两张表：
+
+- `blind_review.csv`：给专家填的表，**不含系统分数**（否则会引导判断）；
+- `blind_review_key.csv`：编号 → passage_id / 分组 / 分数，评完再对照。
+
+用盲评结果算两个指标：**系统与专家排序的重叠率**（增量价值）、**专家认可率**（可核查性）。
+
+### 4. 最小台账
+
+[`config/review_log_template.csv`](config/review_log_template.csv) 是一张最小记录表：
+
+```
+date, inspector, source, plate_or_passage, checked, result, note
+```
+
+`source` 记 `system_top / random / manual`——三个月后就能算出三者的命中率差，
+即系统相对随机抽查的**提升倍数（lift）**。没有这张表，一年后仍无法证明有用。
+
 > 默认关闭的原因：开与不开是**两种业务口径**（"抓群体"vs"抓个体"），
 > 应显式选择，而不是藏在默认值里。
 

@@ -43,6 +43,46 @@
 
 ## 2026-11-20
 
+### 极少样本场景的方法改造：清单排名、抗规避、盲评
+
+#### 背景
+
+违规夹带一年只有个位数样本、没有查验台账，且人工查验有固定规律、容易被规避。
+原方法用 `contamination=5%` 切阈值，会在 444 辆车上凭空造出 22 条「异常」，
+既无法验证，也不符合"线索"的定位。
+
+#### 关键诊断（`eval_perturbation.py` 的 feature_health）
+
+在现有未标定机位上跑 444 辆真实数据，16 个特征的实际状态：
+
+| 状态 | 数量 | 特征 |
+|---|---|---|
+| 被可靠性门控 | 7 | avg/max speed、speed_variance、path_deviation、path_smoothness、aggregation_index、nearest_vehicle_m |
+| 恒为常量 | 7 | max_dwell_sec、stop_count、dwell_ratio、is_night、night_ratio、freq_index、freq_count_24h |
+| **真正可用** | **2** | duration_sec（81 个取值）、max_concurrent_vehicles（3 个取值） |
+
+结论：当前"无监督异常检测"实际只按**通行时长 + 同屏车数**排序。
+抗规避实测也印证了这点——10 组微扰里 9 组前 20 名完全不变，只有"通行时长 -10%"
+让重叠率降到 0.70。
+
+**最重要的一条**：标定一次可同时解锁 7 个被门控的特征（速度 3、路径 2、聚集 2），
+这不只是"指标 4"的事。
+
+#### 新增
+
+- `scripts/build_review_list.py`：按可疑度排序输出前 N 辆待核查清单，**不产生异常判定**；
+- `scripts/eval_perturbation.py`：对候选施加司机可执行的微扰，比较前 K 重叠率，
+  并输出 `feature_health` 诊断；
+- `scripts/export_blind_review.py`：导出不含分数的盲评表 + 对照键，供专家独立打分；
+- `config/review_log_template.csv`：最小台账模板（`source` 区分 system_top/random/manual）。
+- `tests/test_review_tools.py`（8 个用例）。
+- `README.md` 新增「极少样本场景」小节。
+
+```text
+pytest: 292 passed（原 284 + 8）
+交付检查 5/5
+```
+
 ### 66 分钟全链路复跑：默认模式 vs 演示模式
 
 #### 背景

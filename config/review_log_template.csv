@@ -1,0 +1,4 @@
+date,inspector,source,plate_or_passage,checked,result,note
+2026-11-20,张三,system_top,admin_in_20260901080110_495,是,无异常,停留较久但属正常等位
+2026-11-20,张三,random,admin_in_20260901080110_102,否,未查,当日无查验任务
+2026-11-20,李四,manual,苏A12345,是,发现夹带,后厢夹层
