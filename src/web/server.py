@@ -328,9 +328,26 @@ def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
         if str(record.get("passage_id", "")) == passage_id:
             enriched = dict(record)
             camera = str(record.get("camera_id", "") or "")
+            plate = str(record.get("plate_number", "") or "").strip()
+
+            # 车牌条与 OCR 提示来自 crops/index.json（make_vehicle_thumbnails.py 生成）
+            crop_entry = {}
+            index_path = run_dir / "crops" / "index.json"
+            if index_path.is_file():
+                try:
+                    with open(index_path, encoding="utf-8") as handle:
+                        crop_entry = json.load(handle).get(passage_id, {}) or {}
+                except (json.JSONDecodeError, OSError):
+                    crop_entry = {}
+
             enriched["display"] = {
                 "name": display_name(record),
-                "plate": str(record.get("plate_number", "") or "").strip(),
+                "plate": plate,
+                "plate_text": crop_entry.get("plate_text", ""),
+                "plate_conf": crop_entry.get("plate_conf", 0),
+                "has_plate_image": bool(crop_entry.get("plate_file")),
+                "vehicle_type": record.get("vehicle_type", ""),
+                "vehicle_color": record.get("vehicle_color", ""),
                 "camera": camera,
                 "camera_name": camera_display_name(camera),
                 "headline": build_headline(record),
@@ -509,8 +526,11 @@ class ConsoleHandler(BaseHTTPRequestHandler):
             if len(parts) == 5 and parts[3] == "vehicles":
                 record = vehicle_record(self.root, run_id, parts[4])
                 return self._json(record) if record else self._json({"error": "vehicle not found"}, 404)
-            if len(parts) == 6 and parts[3] == "vehicles" and parts[5] == "thumbnail":
-                path = artifact_path(self.root, run_id, f"crops/{parts[4]}.jpg")
+            if len(parts) == 6 and parts[3] == "vehicles" and parts[5] in {"thumbnail", "plate"}:
+                suffix = "" if parts[5] == "thumbnail" else "_plate"
+                path = artifact_path(self.root, run_id, f"crops/{parts[4]}{suffix}.jpg")
+                if path is None and parts[5] == "plate":
+                    return self._json({"error": "plate image not found"}, 404)
                 return self._file(path) if path else self._json({"error": "thumbnail not found"}, 404)
             if len(parts) == 4 and parts[3] == "artifact":
                 relative = query.get("path", [""])[0]

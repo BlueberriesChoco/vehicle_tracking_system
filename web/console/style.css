@@ -173,6 +173,28 @@ td.evidence { color: var(--muted); font-size: 12px; max-width: 260px; }
 
 .vehicle-head { margin-bottom: 6px; }
 .vehicle-name { font-size: 20px; font-weight: 700; letter-spacing: .5px; }
+
+.plate-block {
+  margin: -4px 0 10px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px;
+}
+.plate-strip {
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  display: block;
+  border-radius: 4px;
+  background: #0f172a;
+}
+.plate-caption {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 5px;
+  text-align: center;
+}
 .vehicle-facts { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 
 .headline {

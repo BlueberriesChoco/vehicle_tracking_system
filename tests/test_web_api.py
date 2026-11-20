@@ -240,3 +240,50 @@ def test_thumbnail_missing_returns_404(tmp_path):
             raise AssertionError("没有截图时应返回 404")
     finally:
         server.shutdown()
+
+
+def test_plate_endpoint_and_display_fields(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+    crops = root / "demo_run" / "crops"
+    crops.mkdir(parents=True, exist_ok=True)
+    (crops / "p_high_plate.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+    (crops / "index.json").write_text(
+        json.dumps({"p_high": {"file": "p_high.jpg", "plate_file": "p_high_plate.jpg",
+                               "plate_text": "A37622", "plate_conf": 0.9}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    record = web.vehicle_record(root, run_id, "p_high")
+    assert record["display"]["plate_text"] == "A37622"
+    assert record["display"]["has_plate_image"] is True
+
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/p_high/plate", timeout=5
+        ) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "image/jpeg"
+    finally:
+        server.shutdown()
+
+
+def test_plate_missing_returns_404(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/p_high/plate", timeout=5
+            )
+        except urllib.error.HTTPError as error:
+            assert error.code == 404
+        else:
+            raise AssertionError("没有车牌条时应返回 404")
+    finally:
+        server.shutdown()

@@ -140,12 +140,47 @@ def crop_vehicle(frame, detections, point):
     return frame[y1:y2, x1:x2].copy(), best
 
 
+def save_plate_strip(crop, passage_id, crops_dir, reader=None):
+    """从原始分辨率车辆裁剪里截出车牌条并放大，供人工读取。
+
+    为什么不用车牌检测器：`models/license_plate_yolov8.pt` 未提供，形态学兜底在
+    这条车道上会把草丛误检成车牌。这里按车辆下部固定比例取条，宁可多带一点背景，
+    也要保证车牌完整落在画面里——**给人看的截图不需要精确框**。
+
+    OCR 只作提示：1080p 下车牌高度约 60px，easyocr 会把 D 读成 0、Z 读成 2，
+    所以结果低置信度时界面只展示、不当作车牌号使用。
+    """
+    height, width = crop.shape[:2]
+    band = crop[int(height * 0.66): int(height * 0.96), int(width * 0.18): int(width * 0.72)]
+    if band.size == 0:
+        return None, "", 0.0
+    big = cv2.resize(band, None, fx=3.0, fy=3.0, interpolation=cv2.INTER_CUBIC)
+    plate_name = f"{passage_id}_plate.jpg"
+    ok, buffer = cv2.imencode(".jpg", big, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+    if ok:
+        buffer.tofile(os.path.join(crops_dir, plate_name))
+
+    text, conf = "", 0.0
+    if reader is not None:
+        try:
+            for _, detected, score in reader.readtext(big):
+                cleaned = "".join(ch for ch in str(detected).upper() if ch.isalnum())
+                if 5 <= len(cleaned) <= 8 and float(score) >= 0.25:
+                    if float(score) > conf:
+                        text, conf = cleaned, float(score)
+        except Exception:
+            text, conf = "", 0.0
+    return plate_name, text, round(conf, 3)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Extract per-vehicle thumbnails from the source video")
     parser.add_argument("--run", required=True, help="Run directory containing risk/risk_*.json")
     parser.add_argument("--video", default="", help="Source video (default: read from run.json 'input')")
     parser.add_argument("--width", type=int, default=360, help="Output image width in pixels")
     parser.add_argument("--max", type=int, default=0, help="Only process the first N vehicles (0 = all)")
+    parser.add_argument("--no-plate", action="store_true", help="Skip the enlarged plate strip")
+    parser.add_argument("--ocr", action="store_true", help="Also run easyocr on the plate strip (slow, low accuracy)")
     args = parser.parse_args()
 
     run_dir = os.path.abspath(args.run)
@@ -187,6 +222,16 @@ def main():
     crops_dir = os.path.join(run_dir, "crops")
     os.makedirs(crops_dir, exist_ok=True)
 
+    reader = None
+    if args.ocr:
+        try:
+            import easyocr
+
+            reader = easyocr.Reader(["ch_sim", "en"], gpu=False, verbose=False)
+            logger.info("easyocr 已加载（仅作提示，识别率有限）")
+        except Exception as exc:  # OCR 只是锦上添花，失败不阻断
+            logger.warning("easyocr 不可用，跳过 OCR：%s", exc)
+
     index = {}
     frame_index = 0
     target_pos = 0
@@ -202,19 +247,27 @@ def main():
                 if crop is not None and crop.size:
                     height, width = crop.shape[:2]
                     scale = args.width / float(width)
-                    crop = cv2.resize(crop, (args.width, max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
+                    thumb = cv2.resize(crop, (args.width, max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
                     filename = f"{target['passage_id']}.jpg"
                     path = os.path.join(crops_dir, filename)
-                    ok2, buffer = cv2.imencode(".jpg", crop, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+                    ok2, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
                     if ok2:
                         buffer.tofile(path)
                         saved += 1
-                        index[target["passage_id"]] = {
+                        entry = {
                             "file": filename,
                             "frame": target["frame"],
                             "bbox": [round(float(v), 1) for v in bbox],
                             "enter_time": target["enter_time"],
                         }
+                        if not args.no_plate:
+                            plate_file, plate_text, plate_conf = save_plate_strip(
+                                crop, target["passage_id"], crops_dir, reader
+                            )
+                            entry.update(
+                                {"plate_file": plate_file, "plate_text": plate_text, "plate_conf": plate_conf}
+                            )
+                        index[target["passage_id"]] = entry
             target_pos += 1
         frame_index += 1
     cap.release()

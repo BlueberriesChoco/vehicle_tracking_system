@@ -142,13 +142,36 @@ function renderDetail(record) {
   shot.appendChild(image);
   body.appendChild(shot);
 
+  // 1.5) 车牌条：1080p 下车牌只有 ~60px 高，放大给人看；机器识读仅作参考
+  const plateBlock = el("div", "plate-block");
+  const plateImg = el("img", "plate-strip");
+  plateImg.alt = "车牌放大";
+  plateImg.src = `/api/runs/${encodeURIComponent(state.activeRun)}/vehicles/${encodeURIComponent(record.passage_id)}/plate?t=${Date.now()}`;
+  plateImg.addEventListener("error", () => plateBlock.remove());
+  plateBlock.appendChild(plateImg);
+
+  let caption;
+  if (display.plate) {
+    caption = `车牌：${display.plate}`;
+  } else if (display.plate_text) {
+    const conf = Number(display.plate_conf || 0).toFixed(2);
+    caption = `机器识读：${display.plate_text}（置信度 ${conf}，仅供参考，请以放大图为准）`;
+  } else {
+    caption = "车牌未识别，请对照上方放大图人工核对";
+  }
+  plateBlock.appendChild(el("div", "plate-caption", caption));
+  body.appendChild(plateBlock);
+
   // 2) 基本信息（不含算法参数）
   const head = el("div", "vehicle-head");
-  head.appendChild(el("div", "vehicle-name", display.name || "未识别车牌"));
+  head.appendChild(el("div", "vehicle-name", display.plate || display.plate_text || display.name || "未识别车牌"));
   const facts = el("div", "vehicle-facts");
   facts.appendChild(el("span", "", display.camera_name || record.camera_id || "—"));
   facts.appendChild(el("span", "", fmtTime(record.enter_time)));
   facts.appendChild(el("span", "", `停留 ${record.duration_sec ?? "—"} 秒`));
+  const look = [display.vehicle_color, display.vehicle_type].filter(Boolean).join(" ");
+  if (look) facts.appendChild(el("span", "", look));
+  facts.appendChild(el("span", "dim", `轨迹 ${record.track_id ?? "—"}`));
   head.appendChild(facts);
   body.appendChild(head);
 
