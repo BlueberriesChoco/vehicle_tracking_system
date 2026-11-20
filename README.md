@@ -817,6 +817,7 @@ python scripts/serve_console.py --allow-runs    # 额外允许触发新任务
 | `GET /api/runs/{id}` | 详情（图统计、参数、检查项） |
 | `GET /api/runs/{id}/review?budget=N` | 待核查清单（复用 `src/report/review_list.py`） |
 | `GET /api/runs/{id}/vehicles/{passage_id}` | 单车详情（分量、证据、报告） |
+| `GET /api/runs/{id}/vehicles/{passage_id}/thumbnail` | 该车在通道内的截图（缺图返回 404） |
 | `GET /api/runs/{id}/artifact?path=...` | 下载 run 内产物（拒绝目录穿越） |
 | `POST /api/runs` | 启动新 run（仅 `--allow-runs` 时开放，异步子进程） |
 | `GET /api/jobs/{id}` | 任务进度（解析日志 `Frame x/y`） |
@@ -824,6 +825,22 @@ python scripts/serve_console.py --allow-runs    # 额外允许触发新任务
 
 > 跑新的 run 时建议用 `--output data/outputs/runs/<run_id>`，这样控制台会把它当作一次独立运行，
 > `run.json` 里的模型版本也能被正确识别。
+
+### 车辆截图
+
+详情页右侧会显示该车在通道内的截图。截图不随流水线保存（`best_crop` 只在内存里），
+需要跑一次回填：
+
+```bash
+python scripts/make_vehicle_thumbnails.py \
+  --run data/outputs/e2e_acceptance_demo \
+  --video data/outputs/h264/admin_in/Download_..._20260901080110_20260901090712.h264 \
+  --width 360
+```
+
+- 按 `enter_time` 定位帧，取轨迹中段（车辆离镜头更近）检测并裁剪；
+- 输出到 `<run>/crops/<passage_id>.jpg` 与 `crops/index.json`；
+- 找不到源视频时可用 `--video` 显式指定；有 `run.json` 时自动读取 `input`。
 
 > 默认关闭的原因：开与不开是**两种业务口径**（"抓群体"vs"抓个体"），
 > 应显式选择，而不是藏在默认值里。

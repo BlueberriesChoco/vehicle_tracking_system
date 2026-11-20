@@ -407,6 +407,9 @@ class ConsoleHandler(BaseHTTPRequestHandler):
             if len(parts) == 5 and parts[3] == "vehicles":
                 record = vehicle_record(self.root, run_id, parts[4])
                 return self._json(record) if record else self._json({"error": "vehicle not found"}, 404)
+            if len(parts) == 6 and parts[3] == "vehicles" and parts[5] == "thumbnail":
+                path = artifact_path(self.root, run_id, f"crops/{parts[4]}.jpg")
+                return self._file(path) if path else self._json({"error": "thumbnail not found"}, 404)
             if len(parts) == 4 and parts[3] == "artifact":
                 relative = query.get("path", [""])[0]
                 path = artifact_path(self.root, run_id, relative)

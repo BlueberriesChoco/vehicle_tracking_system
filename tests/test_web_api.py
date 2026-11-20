@@ -201,3 +201,42 @@ def test_post_runs_rejected_when_read_only(tmp_path):
             raise AssertionError("只读模式应返回 403")
     finally:
         server.shutdown()
+
+
+def test_thumbnail_endpoint_serves_crop(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+    crops = root / "demo_run" / "crops"
+    crops.mkdir(parents=True, exist_ok=True)
+    (crops / "p_high.jpg").write_bytes(b"\xff\xd8\xff\xd9")
+
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/p_high/thumbnail", timeout=5
+        ) as response:
+            assert response.status == 200
+            assert response.headers["Content-Type"] == "image/jpeg"
+            assert response.read().startswith(b"\xff\xd8")
+    finally:
+        server.shutdown()
+
+
+def test_thumbnail_missing_returns_404(tmp_path):
+    root = _fake_root(tmp_path)
+    run_id = web.list_runs(root)[0]["id"]
+
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/runs/{run_id}/vehicles/unknown/thumbnail", timeout=5
+            )
+        except urllib.error.HTTPError as error:
+            assert error.code == 404
+        else:
+            raise AssertionError("没有截图时应返回 404")
+    finally:
+        server.shutdown()

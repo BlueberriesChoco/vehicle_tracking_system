@@ -127,6 +127,20 @@ function renderDetail(record) {
   const score = Number(record.risk_score_100 || 0);
   const components = record.risk_components || {};
 
+  // 车辆截图：来自 make_vehicle_thumbnails.py 回填的 crops/<passage_id>.jpg
+  const shot = document.createElement("div");
+  shot.className = "vehicle-shot-wrap";
+  const image = document.createElement("img");
+  image.className = "vehicle-shot";
+  image.alt = "行政通道车辆截图";
+  image.src = `/api/runs/${encodeURIComponent(state.activeRun)}/vehicles/${encodeURIComponent(record.passage_id)}/thumbnail?t=${Date.now()}`;
+  image.addEventListener("error", () => {
+    shot.classList.add("missing");
+    shot.innerHTML = '<div class="vehicle-shot-empty">该车暂无截图<br /><span>先跑 scripts/make_vehicle_thumbnails.py 回填</span></div>';
+  });
+  shot.appendChild(image);
+  body.appendChild(shot);
+
   const head = document.createElement("div");
   head.innerHTML = `
     <div class="kv">
