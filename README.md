@@ -791,6 +791,40 @@ date, inspector, source, plate_or_passage, checked, result, note
 `source` 记 `system_top / random / manual`——三个月后就能算出三者的命中率差，
 即系统相对随机抽查的**提升倍数（lift）**。没有这张表，一年后仍无法证明有用。
 
+## 排查控制台（只读）
+
+不引入任何第三方依赖（标准库 `http.server`），直接读 `data/outputs` 下的 run 产物。
+
+```bash
+python scripts/serve_console.py                 # 只读浏览
+python scripts/serve_console.py --allow-runs    # 额外允许触发新任务
+```
+
+打开 `http://127.0.0.1:8765`，三栏布局：运行记录 / 待核查清单 / 车辆详情。
+
+**设计要点**：
+
+- **只读产物，不碰算法**。pipeline 一行不改，控制台只扫描目录、读 JSON/CSV。
+- **按 run 归档**：每次跑写一份 `run.json`（机型、源文件、模型版本、参数、计数）。
+  模型改进后产生新 run，旧 run 仍可回放对比——这是"先搭框架、模型后改"能成立的前提。
+- **口径显式**：界面徽标会标出 `未标定`、`样本内训练`、`模型版本未声明`，
+  避免演示时把"能跑通"说成"已达标"。
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/health` | 存活与 runs 根目录 |
+| `GET /api/runs` | run 列表（车辆数、告警数、中风险、模型版本、是否标定） |
+| `GET /api/runs/{id}` | 详情（图统计、参数、检查项） |
+| `GET /api/runs/{id}/review?budget=N` | 待核查清单（复用 `src/report/review_list.py`） |
+| `GET /api/runs/{id}/vehicles/{passage_id}` | 单车详情（分量、证据、报告） |
+| `GET /api/runs/{id}/artifact?path=...` | 下载 run 内产物（拒绝目录穿越） |
+| `POST /api/runs` | 启动新 run（仅 `--allow-runs` 时开放，异步子进程） |
+| `GET /api/jobs/{id}` | 任务进度（解析日志 `Frame x/y`） |
+| `GET /api/models` | 本地模型文件与各 run 的模型版本 |
+
+> 跑新的 run 时建议用 `--output data/outputs/runs/<run_id>`，这样控制台会把它当作一次独立运行，
+> `run.json` 里的模型版本也能被正确识别。
+
 > 默认关闭的原因：开与不开是**两种业务口径**（"抓群体"vs"抓个体"），
 > 应显式选择，而不是藏在默认值里。
 

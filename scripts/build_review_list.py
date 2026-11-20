@@ -20,62 +20,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src.report.review_list import COLUMNS, build_rows, rank_vehicles
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-COLUMNS = [
-    "rank",
-    "passage_id",
-    "camera_id",
-    "enter_time",
-    "duration_sec",
-    "risk_score_100",
-    "evidence_count",
-    "top_evidence",
-    "plate_number",
-]
-
-
-def _evidence_summary(record: dict, limit: int = 2) -> str:
-    items = record.get("evidence", []) or []
-    summaries = []
-    for item in items[:limit]:
-        text = str(item.get("summary", "") or "").strip()
-        if text:
-            summaries.append(text)
-    return "；".join(summaries)
-
-
-def rank_vehicles(vehicles, budget: int = 20, min_score: float = 0.0):
-    """按可疑度排序并截断到预算，不设「异常」布尔标记。"""
-    eligible = [
-        record for record in vehicles
-        if float(record.get("risk_score_100", 0) or 0) >= min_score
-    ]
-    eligible.sort(key=lambda record: -float(record.get("risk_score_100", 0) or 0))
-    if budget > 0:
-        eligible = eligible[:budget]
-    return eligible
-
-
-def build_rows(vehicles) -> list:
-    rows = []
-    for rank, record in enumerate(vehicles, start=1):
-        rows.append(
-            {
-                "rank": rank,
-                "passage_id": record.get("passage_id", ""),
-                "camera_id": record.get("camera_id", ""),
-                "enter_time": record.get("enter_time", ""),
-                "duration_sec": record.get("duration_sec", ""),
-                "risk_score_100": record.get("risk_score_100", ""),
-                "evidence_count": len(record.get("evidence", []) or []),
-                "top_evidence": _evidence_summary(record),
-                "plate_number": record.get("plate_number", ""),
-            }
-        )
-    return rows
 
 
 def main():

@@ -43,6 +43,45 @@
 
 ## 2026-11-20
 
+### 排查控制台 MVP：只读后端 + 三栏前端
+
+#### 背景
+
+课题指标里有"平台"这一项，而算法还在改。先把界面与服务框架搭起来，
+模型以后替换不影响界面——前提是**先把运行产物的契约定死**。
+
+#### 具体改动
+
+- 新增 `src/web/server.py`：标准库 `http.server`，**零第三方依赖**（不引入 FastAPI，
+  不改运行环境）。只读扫描 `data/outputs` 下的 run 目录，组装 JSON。
+- 新增 `web/console/{index.html, app.js, style.css}`：三栏布局
+  （运行记录 / 待核查清单 / 车辆详情），无构建、无 npm。
+- 新增 `scripts/serve_console.py`：启动入口，默认只监听 `127.0.0.1`；
+  默认只读，加 `--allow-runs` 才允许 `POST /api/runs`。
+- 新增 `src/report/review_list.py`：把待核查清单的排序逻辑从脚本抽出，
+  脚本与控制台共用一份，避免两处规则分叉。
+- `run_full_pipeline.py` 新增 **`run.json` 运行清单**：记录机型、源文件、模型版本、
+  参数（contamination / retrain / trained）与计数。控制台据此显示
+  `v1-iforest+traj` 之类的版本徽标；模型改进后新 run 覆盖新版本，旧 run 仍可回放。
+- 修复：`evidence` 项的文本字段是 `description`（不是 `summary`），
+  控制台与清单摘要此前取错导致证据列空白。
+
+#### 界面上的三个"必须显示"
+
+- `未标定`：速度/路径/聚集特征被门控，模型实际只用了少数特征；
+- `样本内训练`：`--retrain` 且确实训练过时提示，指标不能当泛化结果；
+- `模型版本未声明`：没有 `run.json` 的旧 run，只能显示推断值。
+
+#### 测试
+
+`tests/test_web_api.py`（10 个用例）：清单排序与预算、run 摘要与详情、
+单车查询、目录穿越拦截、HTTP 冒烟（随机端口）、只读模式拒绝 POST。
+
+```text
+pytest: 302 passed（原 292 + 10）
+CI: 6 步全绿
+```
+
 ### 现场标定配套：可打印记录单 + 测量值转换脚本
 
 #### 修改原因

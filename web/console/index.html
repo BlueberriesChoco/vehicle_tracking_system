@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>综保区行政通道 · 车辆异常排查控制台</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <strong>综保区行政通道 · 排查控制台</strong>
+      <span class="sub" id="rootHint"></span>
+    </div>
+    <div class="actions">
+      <label class="budget">
+        核查预算
+        <select id="budget">
+          <option value="10">10 辆</option>
+          <option value="20" selected>20 辆</option>
+          <option value="50">50 辆</option>
+          <option value="0">全部</option>
+        </select>
+      </label>
+      <button id="refresh" type="button">刷新</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main class="layout">
+    <section class="panel runs">
+      <h2>运行记录 <span class="count" id="runCount"></span></h2>
+      <div id="runList" class="list"></div>
+    </section>
+
+    <section class="panel review">
+      <h2>待核查清单 <span class="count" id="reviewCount"></span></h2>
+      <p class="hint" id="reviewHint">按可疑度排序，不设异常阈值——这是线索，不是判定。</p>
+      <div class="kpis" id="kpis"></div>
+      <div class="table-wrap">
+        <table id="reviewTable">
+          <thead>
+            <tr>
+              <th>#</th><th>车辆</th><th>进入时间</th><th>时长(s)</th><th>可疑度</th><th>证据</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel detail">
+      <h2>车辆详情</h2>
+      <div id="detailEmpty" class="empty">从中间列表选一辆车</div>
+      <div id="detailBody" class="hidden"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

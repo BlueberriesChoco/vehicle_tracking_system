@@ -25,6 +25,7 @@ import glob
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -259,6 +260,43 @@ def main():
             f.write(record["report_text"] + "\n\n")
 
     anomaly_count = sum(1 for r in enriched if int(r.get("is_anomaly", 0) or 0) == 1)
+
+    # ---- 8. 运行清单：给控制台/后续对比一个稳定契约 ----
+    # 模型改进后会产生新的 run，旧 run 靠这份清单仍可回放，界面不会因为字段变化而返工。
+    models = []
+    if iforest is not None:
+        models.append({"name": "iforest", "path": iforest_path})
+    if trajectory_model is not None:
+        models.append({"name": "trajectory", "path": traj_prefix + ".pt"})
+    has_iforest = iforest is not None
+    has_traj = trajectory_model is not None
+    model_version = "v1-iforest+traj" if (has_iforest and has_traj) else (
+        "v1-iforest-only" if has_iforest else ("v1-traj-only" if has_traj else "v1-rules-only")
+    )
+    manifest = {
+        "run_id": os.path.basename(os.path.abspath(outputs)),
+        "camera": args.camera,
+        "input": os.path.abspath(args.input),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "model_version": model_version,
+        "models": models,
+        "params": {
+            "contamination": contamination,
+            "retrain": bool(args.retrain),
+            "trained": bool(has_iforest or has_traj),
+            "max_alert_rate": args.max_alert_rate,
+        },
+        "counts": {
+            "vehicles": len(enriched),
+            "analysis_targets": len(target_rows),
+            "anomalies": anomaly_count,
+            "graph_nodes": graph_payload["node_count"] if graph_payload else 0,
+            "communities": len(graph_payload["communities"]) if graph_payload else 0,
+        },
+    }
+    with open(os.path.join(outputs, "run.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2, default=str)
+
     logger.info(
         "Done. vectors=%s, anomalies=%s, graph_nodes=%s, communities=%s",
         len(enriched),
