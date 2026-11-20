@@ -41,6 +41,44 @@
 
 **工程质量**：253 个单元测试、`scripts/ci.ps1` 6 步全绿、`scripts/delivery_check.py` 5 项门禁。
 
+## 2026-11-20
+
+### 跨机位全局身份回灌（新增 global_identity 模块与 --write-back）
+
+#### 修改原因
+
+`run_multi_camera.py` 已经能算出 `global_vehicle_ids`，但只写进 JSON：
+向量里没有 `global_vehicle_id`，图谱仍按 `passage_id` 建节点（同一辆车在两个机位
+会变成两个节点），风险报告也拿不到"在别的机位出现过"的证据。
+
+#### 具体改动
+
+- 新增 `src/pipeline/global_identity.py`：
+  - `annotate_global_identity`：复用 `apply_stitch`，只给真正匹配上的通行打全局号；
+  - `merge_passages`：把多次通行合并成"一车一行"（时间取并集、时长相加、数值取最大），
+    避免同一辆车在图里出现重复节点；
+  - `build_global_graph`：`RelationConfig(use_global_vehicle_id=True)` 建全局图；
+  - `apply_graph_by_identity`：把身份级 G 回填到**每次通行**；键完全不匹配时报错
+    （否则 G 会静默变成 0）；
+  - `merge_risk_records`：按身份合并风险记录，取最高分、证据去重、伙伴并集；
+  - `identity_summary`：输出身份覆盖率与多机位车辆数。
+- `scripts/run_multi_camera.py` 新增 `--write-back <dir>`，产出
+  `vectors/<camera>.csv`、`graph_global.json`、`risk_global.json`、`summary.json`。
+- `README.md` 新增「多机位与全局身份回灌」小节。
+
+#### 约定
+
+一个全局身份 = 一个图节点 = 一条风险记录；未拼接上的通行保持独立，不强行合并。
+
+#### 测试
+
+`tests/test_global_identity.py`（8 个用例）：只标注匹配项、一车一节点、
+G 回填每次通行、键不匹配报错、风险合并取最大与证据去重、未拼接保持独立、覆盖率统计。
+
+```text
+pytest: 283 passed（原 275 + 8）
+```
+
 ## 2026-11-18
 
 ### 跨窗轨迹连续性：实测证据与防回流测试

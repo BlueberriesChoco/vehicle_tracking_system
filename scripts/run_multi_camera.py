@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import csv
 import json
 import os
 import sys
@@ -31,6 +32,15 @@ from src.graph import (
     louvain_partition,
     modularity,
 )
+from src.pipeline.global_identity import (
+    annotate_global_identity,
+    apply_graph_by_identity,
+    build_global_graph,
+    identity_summary,
+    merge_passages,
+    merge_risk_records,
+)
+from src.risk import EvidenceBuilder, RiskFusion, TimeFrequencyScorer
 from src.trajectory.stitching import CrossCameraStitcher
 from src.utils.logger import get_logger
 
@@ -109,6 +119,82 @@ def detect_rows(rows, camera_id):
     return detected, {"trained": True, "targets": len(targets), "anomalies": anomalies}
 
 
+def write_csv(rows, path):
+    """写出向量 CSV（键取并集，缺字段留空）。"""
+    if not rows:
+        return
+    fields = []
+    for row in rows:
+        for key in row:
+            if key not in fields:
+                fields.append(key)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fields})
+
+
+def write_back(directory, detected, stitch_payload, top_k):
+    """把跨机位身份回灌到向量、全局图与风险报告。"""
+    annotated = annotate_global_identity(detected, stitch_payload)
+    flat = [row for rows in annotated.values() for row in rows]
+
+    graph = build_global_graph(merge_passages(flat), top_k=top_k)
+    flat = apply_graph_by_identity(flat, graph)
+    flat = TimeFrequencyScorer().score(flat)
+    flat = RiskFusion().fuse(flat)
+    flat = EvidenceBuilder().build_many(flat)
+    merged = merge_risk_records(flat)
+
+    by_camera = {}
+    for row in flat:
+        by_camera.setdefault(str(row.get("camera_id", "") or ""), []).append(row)
+    for camera_id, rows in by_camera.items():
+        write_csv(rows, os.path.join(directory, "vectors", f"{camera_id}.csv"))
+
+    os.makedirs(directory, exist_ok=True)
+    with open(os.path.join(directory, "graph_global.json"), "w", encoding="utf-8") as handle:
+        json.dump(graph or {}, handle, ensure_ascii=False, indent=2)
+    with open(os.path.join(directory, "risk_global.json"), "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "vehicle_count": len(merged),
+                "high_risk": sum(1 for row in merged if row.get("risk_level") == "high"),
+                "medium_risk": sum(1 for row in merged if row.get("risk_level") == "medium"),
+                "vehicles": merged,
+            },
+            handle,
+            ensure_ascii=False,
+            indent=2,
+        )
+    summary = {
+        "identity": identity_summary(annotated, merged),
+        "graph": {
+            "node_count": (graph or {}).get("node_count", 0),
+            "edge_count": (graph or {}).get("edge_count", 0),
+            "community_count": len((graph or {}).get("communities", [])),
+            "modularity": (graph or {}).get("modularity", 0.0),
+        },
+        "risk": {
+            "high": sum(1 for row in merged if row.get("risk_level") == "high"),
+            "medium": sum(1 for row in merged if row.get("risk_level") == "medium"),
+            "evidence_total": sum(len(row.get("evidence", []) or []) for row in merged),
+        },
+    }
+    with open(os.path.join(directory, "summary.json"), "w", encoding="utf-8") as handle:
+        json.dump(summary, handle, ensure_ascii=False, indent=2)
+    logger.info(
+        "Write-back: %s passages -> %s vehicles (%s with global id), graph nodes=%s",
+        summary["identity"]["passages"],
+        summary["identity"]["vehicles_after_merge"],
+        summary["identity"]["passages_with_global_id"],
+        summary["graph"]["node_count"],
+    )
+    return summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="Multi-camera orchestration")
     parser.add_argument("--cameras", required=True, help='e.g. "camA=dirA,camB=dirB"')
@@ -117,6 +203,11 @@ def main():
     parser.add_argument("--threshold", type=float, default=0.7, help="ReID cosine threshold")
     parser.add_argument("--top-k", type=int, default=3, help="Graph top-k")
     parser.add_argument("--no-detect", action="store_true", help="Skip unsupervised detection")
+    parser.add_argument(
+        "--write-back",
+        default="",
+        help="Directory to write global-identity vectors, global graph and risk report",
+    )
     args = parser.parse_args()
 
     cameras = parse_cameras(args.cameras)
@@ -177,6 +268,11 @@ def main():
         "detection": payload["detection"],
         "stitching": {key: value["match_count"] for key, value in stitch_results.items()},
     }, ensure_ascii=False, indent=2))
+
+    if args.write_back:
+        summary = write_back(args.write_back, detected, payload, args.top_k)
+        print(json.dumps({"write_back": summary}, ensure_ascii=False, indent=2))
+
     logger.info("Saved: %s", args.output)
 
 

@@ -278,6 +278,31 @@ python scripts/run_batch_day.py \
 - 同一小时内的多个分段会带开始时间后缀，避免互相覆盖；
 - 进度与结果写入 `batch_day_summary.json`。
 
+## 多机位与全局身份回灌
+
+先对每个机位分别产出向量，再把相邻机位拼接成全局车辆身份：
+
+```bash
+python scripts/run_multi_camera.py \
+  --cameras "admin_in=data/outputs/e2e/vectors/admin_in,admin_out=data/outputs/day_20260901/vectors/admin_out" \
+  --pairs "admin_in:admin_out" \
+  --output data/outputs/multi_camera.json \
+  --write-back data/outputs/multi_camera_wb
+```
+
+`--write-back` 会额外产出四类文件：
+
+- `vectors/<camera>.csv`：回填了 `global_vehicle_id` 与 `cross_camera_partners` 的向量；
+- `graph_global.json`：**按全局身份建图**，同一辆车跨机位只算一个节点；
+- `risk_global.json`：按身份合并的风险记录（证据去重、伙伴取并集、带 `passage_count`）；
+- `summary.json`：身份覆盖率、合并后车辆数、多机位车辆数。
+
+约定：**一个全局身份 = 一个图节点 = 一条风险记录**；没拼接上的通行保持独立，
+不会被强行并成一辆车。
+
+> 当前仓库没有时间同步的双机位录像，拼接匹配数为 0 属于**数据缺口**而不是代码问题；
+> 回灌链路的正确性由 `tests/test_global_identity.py` 的 8 个用例覆盖。
+
 ## 性能基准
 
 ```bash
