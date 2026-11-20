@@ -171,6 +171,46 @@ td.evidence { color: var(--muted); font-size: 12px; max-width: 260px; }
 }
 .vehicle-shot-empty span { color: #94a3b8; font-size: 11.5px; }
 
+.vehicle-head { margin-bottom: 6px; }
+.vehicle-name { font-size: 20px; font-weight: 700; letter-spacing: .5px; }
+.vehicle-facts { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+
+.headline {
+  background: #eef4fb;
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  border-radius: 0 4px 4px 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.reason-list { display: flex; flex-direction: column; gap: 6px; }
+.reason-item { display: flex; gap: 8px; font-size: 13px; line-height: 1.55; }
+.reason-label {
+  flex: 0 0 92px;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+  padding-top: 1px;
+}
+
+details { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12.5px;
+  user-select: none;
+}
+details > summary:hover { color: var(--accent); }
+
+.trace-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.trace-item { display: flex; gap: 10px; font-size: 12px; color: #334155; }
+.trace-time { color: var(--accent); font-variant-numeric: tabular-nums; }
+
+td.reason { color: #475569; font-size: 12.5px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.vehicle { font-weight: 600; white-space: nowrap; }
+
 .detail h3 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .kv { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; font-size: 13px; }
 .kv .k { color: var(--muted); }

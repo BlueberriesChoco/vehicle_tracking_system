@@ -93,6 +93,73 @@ def _flag(value) -> bool:
     return str(value).strip() in {"1", "True", "true", "yes"}
 
 
+def camera_display_name(camera: str) -> str:
+    """机位中文名（来自 config/camera/<id>.yaml 的 camera_name）。"""
+    if not camera:
+        return ""
+    config = ROOT / "config" / "camera" / f"{camera}.yaml"
+    if not config.is_file():
+        return camera
+    for line in config.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("camera_name:"):
+            return stripped.split(":", 1)[1].strip().strip('"').strip("'")
+    return camera
+
+
+def build_headline(record: dict) -> str:
+    """一句话说明"为什么排在这里"。"""
+    components = record.get("risk_components") or {}
+    graph = float(components.get("G", 0) or 0)
+    anomaly = float(components.get("A", 0) or 0)
+    residual = float(record.get("traj_residual", 0) or 0)
+
+    if graph >= 0.8:
+        size = record.get("community_size")
+        try:
+            size_value = int(size)
+        except (TypeError, ValueError):
+            size_value = 0
+        if size_value > 1:
+            return (
+                f"主要因为它与该时段另外 {size_value - 1} 辆车形成紧密关联"
+                f"（同组共 {size_value} 辆），关联异常指数 {graph:.2f}。"
+            )
+        return f"主要因为它与同批车辆的关系明显异常（关联指数 {graph:.2f}）。"
+    if residual >= 20:
+        return f"主要因为行驶轨迹偏离预测，偏差约 {residual:.0f} 像素。"
+    if anomaly >= 0.6:
+        return f"主要因为速度、时长等行为组合偏离常态（异常指数 {anomaly:.2f}）。"
+    rule = str(record.get("alert_reason", "") or "").strip()
+    if rule:
+        return f"主要因为触发监管规则：{rule.split(';')[0]}。"
+    return "综合多项弱信号，建议例行核查。"
+
+
+def build_reasons(record: dict) -> List[dict]:
+    """把结构化证据翻译成给人看的原因（保留原文用于反查）。"""
+    from src.report.review_list import reasons_with_labels
+
+    components = record.get("risk_components") or {}
+    graph = float(components.get("G", 0) or 0)
+    anomaly = float(components.get("A", 0) or 0)
+    residual = float(record.get("traj_residual", 0) or 0)
+    rule = str(record.get("alert_reason", "") or "").strip()
+
+    plain = {
+        "graph_anomaly": f"与同批其他车辆的关系明显异常（关联指数 {graph:.2f}）",
+        "transformer_residual": f"行驶轨迹与预测偏差约 {residual:.0f} 像素",
+        "isolation_forest": f"速度、时长等行为组合偏离常态（异常指数 {anomaly:.2f}）",
+        "rule": f"触发监管规则：{rule.split(';')[0]}" if rule else "",
+    }
+
+    output = []
+    for item in reasons_with_labels(record):
+        text = plain.get(item.get("signal", "")) or item.get("text", "")
+        output.append({**item, "plain": text})
+    return output
+
+
 def camera_calibrated(camera: str) -> bool:
     """摄像头配置里是否有未注释的 homography。"""
     config = ROOT / "config" / "camera" / f"{camera}.yaml"
@@ -153,17 +220,28 @@ def summarize_run(run_dir: Path, root: Path) -> dict:
     vehicles = risk.get("vehicle_count") or len(vectors) or len(alerts)
     alert_count = sum(1 for row in alerts if _flag(row.get("is_anomaly")))
     camera = manifest.get("camera") or (risk.get("vehicles") or [{}])[0].get("camera_id", "")
+    camera_name = camera_display_name(camera)
+
+    first_enter = ""
+    for row in risk.get("vehicles", []) or []:
+        if row.get("enter_time"):
+            first_enter = str(row["enter_time"])
+            break
+    date_part = first_enter[:10] if first_enter else ""
 
     summary = {
         "id": run_id_for(run_dir, root),
         "name": run_dir.relative_to(root).as_posix() or ".",
         "camera": camera,
+        "camera_name": camera_name,
+        "label": " · ".join(part for part in (camera_name, date_part, f"{vehicles} 辆") if part),
         "vehicles": vehicles,
         "alerts": alert_count,
         "alert_rate": round(100.0 * alert_count / vehicles, 2) if vehicles else None,
         "medium": risk.get("medium_risk"),
         "high": risk.get("high_risk"),
         "evidence_total": sum(len(row.get("evidence", []) or []) for row in risk.get("vehicles", [])),
+        "risk_max": max((float(row.get("risk_score_100", 0) or 0) for row in risk.get("vehicles", []) or []), default=None),
         "model_version": version["model_version"],
         "model_declared": version["declared"],
         "calibrated": camera_calibrated(camera) if camera else False,
@@ -225,17 +303,41 @@ def review_rows(root: Path, run_id: str, budget: int = 20) -> Optional[List[dict
         return None
     risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
     vehicles = risk.get("vehicles", []) if isinstance(risk, dict) else []
-    return build_rows(rank_vehicles(vehicles, budget=budget))
+    selected = rank_vehicles(vehicles, budget=budget)
+    rows = build_rows(selected)
+
+    # 列表里的「主要原因」用一句话结论；CSV 导出保留原始证据文本用于审计
+    plain = {}
+    for record in selected:
+        plain[str(record.get("passage_id", ""))] = build_headline(record)
+    for row in rows:
+        key = str(row.get("passage_id", ""))
+        if key in plain:
+            row["reason"] = plain[key]
+    return rows
 
 
 def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
+    from src.report.review_list import display_name, reasons
+
     run_dir = find_run_dir(root, run_id)
     if run_dir is None:
         return None
     risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
     for record in risk.get("vehicles", []) or []:
         if str(record.get("passage_id", "")) == passage_id:
-            return record
+            enriched = dict(record)
+            camera = str(record.get("camera_id", "") or "")
+            enriched["display"] = {
+                "name": display_name(record),
+                "plate": str(record.get("plate_number", "") or "").strip(),
+                "camera": camera,
+                "camera_name": camera_display_name(camera),
+                "headline": build_headline(record),
+                "reasons": build_reasons(record),
+                "reason_texts": reasons(record),
+            }
+            return enriched
     return None
 
 
