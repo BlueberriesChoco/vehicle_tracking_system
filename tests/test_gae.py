@@ -217,3 +217,136 @@ def test_gae_is_deterministic_with_same_seed():
     np.testing.assert_allclose(
         first.reconstruction_error(A), second.reconstruction_error(A), rtol=1e-5
     )
+
+
+
+
+# -- 标定锚点：来源决定可比性（2026-11-20）--------------------------------------
+#
+# G 从 min-max 改为分位锚点标定后，关键差别是锚点来自哪里：
+# - baseline：编码器在独立基线图上训练、锚点也取自基线 → 跨批次可比；
+# - self：训练图即评分图，锚点由本图自算 → 误差带被压缩，标定会放大窄带。
+# 实测本项目 GAE 同图 p99/p50=1.074、SVD 1.446，前者高分车辆明显偏多。
+#
+# 注意：这些用例必须用**结构异质**的图。完全对称的图（环、全连接团）里所有节点
+# 特征逐位相同，重构误差全等，P50 == P99，锚点必然退化——这是数学事实而非缺陷，
+# 由 test_symmetric_graph_yields_degenerate_anchors 把该行为固化为契约。
+
+
+def test_fit_records_baseline_anchors():
+    """fit 结束时必须在训练图（=基线图）上记录锚点，这是跨批次可比的前提。"""
+    baseline = _preferential_attachment(40, seed=3)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+
+    detector.fit(baseline)
+
+    anchors = detector.calibration_anchors_
+    assert anchors is not None
+    assert anchors["n"] == 40
+    # 异质图上误差有真实分布，锚点必须能分开
+    assert anchors["low"] < anchors["high"]
+
+
+def test_score_uses_baseline_anchors_not_self_calibration():
+    """锚点来自基线，所以标定结果里 source 必须是 baseline。"""
+    baseline = _preferential_attachment(40, seed=3)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+    detector.fit(baseline)
+
+    scores = detector.score(baseline)
+
+    assert scores["calibration"]["source"] == "baseline"
+    assert scores["calibration"]["low"] == detector.calibration_anchors_["low"]
+    assert scores["calibration"]["high"] == detector.calibration_anchors_["high"]
+
+
+def test_anchors_survive_save_and_load(tmp_path):
+    """锚点必须随模型持久化，否则跨天评分会退回自标定，可比性丢失。"""
+    baseline = _preferential_attachment(40, seed=3)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+    detector.fit(baseline)
+
+    prefix = str(tmp_path / "gae_calib")
+    detector.save(prefix)
+    loaded = GraphAutoencoderDetector.load(prefix)
+
+    assert loaded.calibration_anchors_ == detector.calibration_anchors_
+    assert loaded.calibration_percentiles == detector.calibration_percentiles
+    assert loaded.score(baseline)["calibration"]["source"] == "baseline"
+
+
+def test_cross_batch_anchor_gives_same_score_for_same_raw_error():
+    """同一个原始误差在两个批次里必须标定出同一个值——这就是「跨批次可比」。
+
+    min-max 下同一辆车在本批排第一得 1.0、换一批排中间得 0.5，分数随批次漂移；
+    锚点标定下，标定值只由 (raw - low) / (high - low) 决定，与本批其他车无关。
+    """
+    baseline = _preferential_attachment(40, seed=3)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+    detector.fit(baseline)
+
+    anchors = detector.calibration_anchors_
+    # 取一个落在锚点区间中间的原始误差，手工算期望标定值
+    raw = (anchors["low"] + anchors["high"]) / 2.0
+    expected = 0.5
+
+    from src.graph.calibration import anchor_normalize
+
+    got = float(anchor_normalize(np.array([raw]), anchors)[0])
+    assert abs(got - expected) < 1e-6
+
+    # 同一 raw 值重复标定结果一致（无本批依赖）
+    again = float(anchor_normalize(np.array([raw]), anchors)[0])
+    assert got == again
+
+
+def test_normal_batch_scores_lower_under_baseline_anchors():
+    """用同分布基线训练的模型给另一张同分布图打分，G 不该大面积顶格。
+
+    min-max 下这张图必然产出一个 1.0；锚点标定下只有超出基线 P99 的节点才顶格。
+    """
+    baseline = _preferential_attachment(40, seed=3)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+    detector.fit(baseline)
+
+    another = _preferential_attachment(40, seed=11)
+    scores = detector.score(another)["graph_anomaly_index"]
+
+    assert scores.shape == (40,)
+    assert np.isfinite(scores).all()
+    assert scores.max() <= 1.0
+    assert scores.min() >= 0.0
+    # 同分布批次里顶格的不该超过 3%（基线 P99 的定义）
+    assert float((scores >= 1.0).mean()) <= 0.03
+
+
+def test_symmetric_graph_yields_degenerate_anchors():
+    """对称图（环）上误差全等 → 锚点 low == high → 标定全 0，不放大噪声。
+
+    这是**契约**而非缺陷：环里每个节点度都是 2、特征逐位相同，不存在
+    「谁比谁更异常」的依据。此时返回全 0 表达的是「本图没有可区分的异常」，
+    比 min-max 强行给某个节点 1.0 更诚实。
+    """
+    ring = _ring(24)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=40, random_state=3)
+
+    detector.fit(ring)
+
+    anchors = detector.calibration_anchors_
+    assert anchors is not None
+    assert anchors["low"] == anchors["high"], anchors
+
+    scores = detector.score(ring)["graph_anomaly_index"]
+    assert np.allclose(scores, 0.0), scores.max()
+
+
+def test_score_without_anchors_falls_back_to_self_calibration():
+    """旧模型（未存锚点）加载后没有锚点，应退回本图自标定并如实标注 source。"""
+    ring = _ring(24)
+    detector = GraphAutoencoderDetector(hidden_dim=16, latent_dim=8, epochs=20, random_state=3)
+    detector.fit(ring)
+    detector.calibration_anchors_ = None  # 模拟旧产物
+
+    scores = detector.score(ring)
+
+    assert scores["calibration"]["source"] == "self"

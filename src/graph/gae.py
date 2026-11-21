@@ -26,6 +26,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .calibration import anchor_normalize, quantile_anchors
+from .features import clustering_coefficient as _clustering
 from .normalize import minmax_normalize
 
 try:
@@ -55,20 +57,6 @@ def normalize_adjacency(adjacency: np.ndarray) -> np.ndarray:
     positive = degrees > 0
     inv_sqrt[positive] = 1.0 / np.sqrt(degrees[positive])
     return inv_sqrt[:, None] * A * inv_sqrt[None, :]
-
-
-def _clustering(adjacency_binary: np.ndarray) -> np.ndarray:
-    n = adjacency_binary.shape[0]
-    coefficients = np.zeros(n, dtype=np.float64)
-    for i in range(n):
-        neighbors = np.nonzero(adjacency_binary[i])[0]
-        degree = int(neighbors.size)
-        if degree < 2:
-            continue
-        subgraph = adjacency_binary[np.ix_(neighbors, neighbors)]
-        links = float(subgraph.sum()) / 2.0
-        coefficients[i] = links / (degree * (degree - 1) / 2.0)
-    return coefficients
 
 
 def node_features(adjacency: np.ndarray) -> np.ndarray:
@@ -179,6 +167,9 @@ class GraphAutoencoderDetector:
         self.masked_edges_: List[Tuple[int, int]] = []
         self.negative_edges_: List[Tuple[int, int]] = []
         self.training_history: List[dict] = []
+        #: 基线图上的分位锚点，用于把目标图的原始残差标定成跨批次可比的 G。
+        self.calibration_anchors_: Optional[Dict[str, float]] = None
+        self.calibration_percentiles: Tuple[float, float] = (50.0, 99.0)
 
     # -- 训练 -----------------------------------------------------------
 
@@ -243,6 +234,15 @@ class GraphAutoencoderDetector:
             loss.backward()
             optimiser.step()
             self.training_history.append({"epoch": epoch + 1, "loss": round(float(loss.item()), 6)})
+
+        # 在训练图（= 正常基线）上取分位锚点：目标图上超过 P99 的残差才记 1.0。
+        # 关键点是锚点来自基线而不是目标批次，否则"本批最异常者恒得满分"。
+        baseline_error = self.node_error(A)
+        self.calibration_anchors_ = quantile_anchors(
+            baseline_error,
+            self.calibration_percentiles[0],
+            self.calibration_percentiles[1],
+        )
         return self
 
     def _sample_negatives(self, binary: np.ndarray, count: int, rng: np.random.RandomState):
@@ -342,16 +342,37 @@ class GraphAutoencoderDetector:
         return self.node_error(adjacency)
 
     def score(self, adjacency: np.ndarray) -> Dict[str, np.ndarray]:
+        """对目标图打分。
+
+        G 用 **fit 阶段在基线图上记录的分位锚点** 标定，而不是对本图做 min-max。
+        差别在于：min-max 会让每张图必然产出一个 1.0，于是"本批最异常者恒得满分"，
+        与这批数据是否真有异常无关；锚点标定下，只有残差超过基线 P99 才会到 1.0，
+        本批全部正常时 G 会整体接近 0——这才是可解释的。
+
+        锚点缺失（例如旧模型）时回退到本图自标定，并在 ``calibration["source"]``
+        标注来源，便于排查口径。
+        """
         A = np.asarray(adjacency, dtype=np.float64).copy()
         np.fill_diagonal(A, 0.0)
         reconstruction = self._reconstruction(A)
         error = self.node_error(A, reconstruction=reconstruction)
         binary = (A > 0).astype(np.float64)
+
+        if self.calibration_anchors_:
+            calibrated = anchor_normalize(error, self.calibration_anchors_)
+            calibration = {**self.calibration_anchors_, "source": "baseline"}
+        else:
+            from .calibration import fit_and_calibrate
+
+            calibrated, anchors = fit_and_calibrate(error)
+            calibration = {**anchors, "source": "self"}
+
         return {
-            "graph_anomaly_index": minmax_normalize(error),
+            "graph_anomaly_index": calibrated,
             "reconstruction_error": error,
             "degree": A.sum(axis=1),
             "clustering": _clustering(binary),
+            "calibration": calibration,
         }
 
     # -- 持久化 ---------------------------------------------------------
@@ -377,6 +398,8 @@ class GraphAutoencoderDetector:
                     "dropout": self.dropout,
                     "mask_fraction": self.mask_fraction,
                     "negative_ratio": self.negative_ratio,
+                    "calibration_anchors": self.calibration_anchors_,
+                    "calibration_percentiles": list(self.calibration_percentiles),
                     "masked_edges": [list(edge) for edge in self.masked_edges_],
                     "negative_edge_count": len(self.negative_edges_),
                     "training_history": self.training_history,
@@ -407,6 +430,10 @@ class GraphAutoencoderDetector:
         )
         detector.masked_edges_ = [tuple(edge) for edge in payload.get("masked_edges", [])]
         detector.training_history = payload.get("training_history", [])
+        detector.calibration_anchors_ = payload.get("calibration_anchors")
+        percentiles = payload.get("calibration_percentiles")
+        if isinstance(percentiles, (list, tuple)) and len(percentiles) == 2:
+            detector.calibration_percentiles = (float(percentiles[0]), float(percentiles[1]))
         in_dim = payload.get("in_dim") or len(NODE_FEATURE_NAMES)
         detector.model = GraphAutoencoder(
             in_dim=int(in_dim),

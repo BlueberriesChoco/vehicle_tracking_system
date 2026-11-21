@@ -425,3 +425,214 @@ def test_detector_score_tokens_do_not_count_as_rule_signal():
     record = {"iforest_score": 0.7, "iforest_anomaly": 1, "traj_anomaly": 0,
               "alert_reason": "iforest_score=0.70;traj_residual=120.0px"}
     assert RiskFusion.count_independent_signals(record) == 1
+
+
+# -- 分量可用性与权重重归一化（2026-11-20）----------------------------------------
+#
+# 背景：单窗口运行时 freq_count_24h 恒为 1、夜间标记恒为 0，T 恒为 0，
+# γ=0.25 成为死权重，R 的数学上限只有 100×(0.4+0.35)=75.0，80 分档不可达。
+# 修法是按批次剔除不可用分量、把剩余权重按比例放大，而不是把 0 当真实读数。
+
+
+def test_time_freq_marks_single_window_as_unavailable():
+    """单窗口白天通行的频次列恒为 1，必须标记为不可用。"""
+    scorer = TimeFrequencyScorer(freq_threshold=6.0)
+
+    record = scorer.score_one(_row(freq_count_24h=1, night_ratio=0.0, is_night=0))
+
+    assert record["time_freq_available"] == 0
+
+
+def test_time_freq_marks_night_passage_as_available():
+    """落在夜间时，夜间那两路本身可判定，算可用。"""
+    scorer = TimeFrequencyScorer(freq_threshold=6.0)
+
+    record = scorer.score_one(_row(freq_count_24h=1, night_ratio=1.0, is_night=1))
+
+    assert record["time_freq_available"] == 1
+
+
+def test_time_freq_marks_repeated_passage_as_available():
+    scorer = TimeFrequencyScorer(freq_threshold=6.0)
+
+    record = scorer.score_one(_row(freq_count_24h=8, night_ratio=0.0, is_night=0))
+
+    assert record["time_freq_available"] == 1
+
+
+def test_weights_renormalize_when_t_unavailable():
+    """T 不可用时权重应放大到 1，而不是让 γ 白占 0.25。"""
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 0.8, "iforest_available": 1,
+         "graph_anomaly_index": 0.6, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    available = fusion.available_components(rows)
+    weights = fusion.effective_weights(available)
+
+    assert available == {"A": True, "G": True, "T": False}
+    assert weights["T"] == 0.0
+    assert weights["A"] + weights["G"] == pytest.approx(1.0)
+    # 原比例 0.4:0.35 保持不变
+    assert weights["A"] / weights["G"] == pytest.approx(0.4 / 0.35, rel=1e-6)
+
+
+def test_risk_ceiling_recovers_to_100_when_t_unavailable():
+    """这是本次修复的核心断言：A、G 都到 1 时，R 应能达到 100 分档。
+
+    修复前同一输入只能到 75.0（γ=0.25 打在恒 0 的 T 上），高风险档永远进不去。
+    """
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 1.0, "iforest_available": 1,
+         "graph_anomaly_index": 1.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+        {"iforest_score": 0.0, "iforest_available": 1,
+         "graph_anomaly_index": 0.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)
+
+    assert fused[0]["risk_score_100"] == pytest.approx(100.0)
+    assert fused[0]["risk_level"] == "high"
+
+
+def test_all_three_available_keeps_original_weights():
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 0.5, "iforest_available": 1,
+         "graph_anomaly_index": 0.5, "graph_available": 1,
+         "time_freq_index": 0.5, "time_freq_available": 1},
+    ]
+
+    weights = fusion.effective_weights(fusion.available_components(rows))
+
+    assert weights["A"] == pytest.approx(0.4)
+    assert weights["G"] == pytest.approx(0.35)
+    assert weights["T"] == pytest.approx(0.25)
+
+
+def test_renormalize_changes_magnitude_not_order():
+    """重归一化只改量纲，不改同批次排序——否则标定就变成了换指标。"""
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 0.9, "iforest_available": 1, "graph_anomaly_index": 0.2, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+        {"iforest_score": 0.3, "iforest_available": 1, "graph_anomaly_index": 0.8, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+        {"iforest_score": 0.5, "iforest_available": 1, "graph_anomaly_index": 0.5, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)
+    renormalized = [row["risk_score_100"] for row in fused]
+
+    # 关掉重归一化，用固定权重再算一次
+    plain = RiskFusion(renormalize=False).fuse(rows)
+    fixed = [row["risk_score_100"] for row in plain]
+
+    assert renormalized != fixed  # 量纲确实变了
+    # 排序一致（按分数降序的名次）
+    assert sorted(range(3), key=lambda i: -renormalized[i]) == sorted(range(3), key=lambda i: -fixed[i])
+
+
+def test_fusion_records_component_availability():
+    """可用性要写进输出，报告层才能解释"为什么这个分不含 T"。"""
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 0.5, "iforest_available": 1,
+         "graph_anomaly_index": 0.5, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)[0]
+
+    assert fused["risk_component_available"] == {"A": 1, "G": 1, "T": 0}
+
+
+# -- 单路证据封顶：高风险必须至少两路独立证据（2026-11-20 二次修正）--------------
+#
+# 重归一化的副作用：只剩一路分量时权重被放大到 1.0，R 退化成该分量原值，
+# 一辆 G=1.0 的车直接得 100 分。冒烟测试（15 辆，A/T 均不可用）实测 2 辆伪 100 分。
+# 只在单路时封顶：两路及以上不折扣，否则本批真实的 80 分会掉到 72。
+
+
+def test_single_component_caps_score_below_high_threshold():
+    """只剩 G 可用时，即使 G=1.0 也不能进 80 分档。"""
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 0.0, "iforest_available": 0,
+         "graph_anomaly_index": 1.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+        {"iforest_score": 0.0, "iforest_available": 0,
+         "graph_anomaly_index": 0.2, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)
+
+    assert fused[0]["risk_score_100"] == pytest.approx(75.0)
+    assert fused[0]["risk_level"] == "medium"   # 不是 high
+    assert fused[0]["risk_score_ceiling"] == 75.0
+    assert fused[0]["risk_score_capped"] == 1
+    assert fused[0]["risk_score_raw_100"] == pytest.approx(100.0)  # 原始分可追溯
+    # 未触顶的记录不受影响
+    assert fused[1]["risk_score_100"] == pytest.approx(20.0)
+    assert fused[1]["risk_score_capped"] == 0
+
+
+def test_two_components_are_not_capped():
+    """两路可用时不折扣：缺的第三路在本项目是结构性缺失（无车牌即无 T）。"""
+    fusion = RiskFusion()
+    rows = [
+        {"iforest_score": 1.0, "iforest_available": 1,
+         "graph_anomaly_index": 1.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+        {"iforest_score": 0.0, "iforest_available": 1,
+         "graph_anomaly_index": 0.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)
+
+    assert fused[0]["risk_score_100"] == pytest.approx(100.0)
+    assert fused[0]["risk_score_ceiling"] == 100.0
+    assert fused[0]["risk_score_capped"] == 0
+
+
+def test_capping_preserves_within_batch_order():
+    """封顶是单调压缩（min），同批次内排序不变。"""
+    fusion = RiskFusion()
+    values = [1.0, 0.9, 0.8, 0.7, 0.6]
+    rows = [
+        {"iforest_score": 0.0, "iforest_available": 0,
+         "graph_anomaly_index": v, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0}
+        for v in values
+    ]
+
+    fused = fusion.fuse(rows)
+    scores = [row["risk_score_100"] for row in fused]
+
+    assert scores == sorted(scores, reverse=True)
+    assert max(scores) == pytest.approx(75.0)
+
+
+def test_renormalize_false_disables_capping():
+    """关掉重归一化就回到旧口径：无封顶，但 T 的死权重问题也随之回来。"""
+    fusion = RiskFusion(renormalize=False)
+    rows = [
+        {"iforest_score": 0.0, "iforest_available": 0,
+         "graph_anomaly_index": 1.0, "graph_available": 1,
+         "time_freq_index": 0.0, "time_freq_available": 0},
+    ]
+
+    fused = fusion.fuse(rows)
+
+    assert fused[0]["risk_score_ceiling"] == 100.0
+    assert fused[0]["risk_score_capped"] == 0
+    # 名义 β=0.35，所以只有 35 分
+    assert fused[0]["risk_score_100"] == pytest.approx(35.0)

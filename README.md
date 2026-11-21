@@ -185,7 +185,7 @@ vehicle_tracking_system/
 │   ├── output/              # 向量、事件、告警 CSV/JSON 输出
 │   ├── visualization/       # 可视化绘制与标注视频
 │   └── utils/               # 线程预取读帧、MBF 抽取、日志等
-├── tests/                   # 回归测试：39 个文件、270 条用例
+├── tests/                   # 回归测试：47 个文件、366 条用例
 ├── web/
 │   └── map_editor/          # 园区地图编辑器（纯前端，直接打开 index.html）
 ├── docs/                    # 标定指南与配图

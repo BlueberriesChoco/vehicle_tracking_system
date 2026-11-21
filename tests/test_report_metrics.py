@@ -147,3 +147,111 @@ def test_collect_metrics_includes_benchmark(tmp_path):
     assert metrics["streams"] == 8.4
     assert "125.6 FPS" in markdown
     assert "8.4 路" in markdown
+
+
+# -- 图谱层健康度：口径随 G 的标定方式变更（2026-11-20）--------------------------
+#
+# G 从 min-max 改为分位锚点标定后（P50→0、P99→1），中位数**按定义就是 0**。
+# 旧判据"中位数为 0 即失效"会恒定误报，CI 的 --require-graph 会因此在正常产物上失败。
+# 新判据看"分布是否有区分度"。
+
+
+def test_graph_median_zero_is_normal_under_anchor_calibration():
+    """标定后中位数为 0 是预期结果，不能算失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": 1.0,
+        "graph_available_nodes": 432,
+    }
+
+    assert graph_layer_is_dead(metrics) is False
+
+
+def test_graph_is_dead_when_all_scores_collapse_to_zero():
+    """所有节点 G 都为 0（最大值也 0）才是真的失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": 0.0,
+        "graph_available_nodes": 432,
+    }
+
+    assert graph_layer_is_dead(metrics) is True
+
+
+def test_graph_is_dead_when_no_available_nodes():
+    """图谱节点键与向量键完全不匹配时，可用节点数为 0。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": None,
+        "graph_available_nodes": 0,
+    }
+
+    assert graph_layer_is_dead(metrics) is True
+
+
+def test_graph_health_falls_back_to_median_for_legacy_payload():
+    """旧产物没有 graph_score_max 字段时，沿用旧判据，避免误报失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    assert graph_layer_is_dead({"component_medians": {"G": 0.4}}) is False
+    assert graph_layer_is_dead({"component_medians": {}}) is True
+
+
+# -- 图谱层健康度：口径随 G 的标定方式变更（2026-11-20）--------------------------
+#
+# G 从 min-max 改为分位锚点标定后（P50→0、P99→1），中位数**按定义就是 0**。
+# 旧判据"中位数为 0 即失效"会恒定误报，CI 的 --require-graph 会因此在正常产物上失败。
+# 新判据看"分布是否有区分度"。
+
+
+def test_graph_median_zero_is_normal_under_anchor_calibration():
+    """标定后中位数为 0 是预期结果，不能算失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": 1.0,
+        "graph_available_nodes": 432,
+    }
+
+    assert graph_layer_is_dead(metrics) is False
+
+
+def test_graph_is_dead_when_all_scores_collapse_to_zero():
+    """所有节点 G 都为 0（最大值也 0）才是真的失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": 0.0,
+        "graph_available_nodes": 432,
+    }
+
+    assert graph_layer_is_dead(metrics) is True
+
+
+def test_graph_is_dead_when_no_available_nodes():
+    """图谱节点键与向量键完全不匹配时，可用节点数为 0。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    metrics = {
+        "component_medians": {"G": 0.0},
+        "graph_score_max": None,
+        "graph_available_nodes": 0,
+    }
+
+    assert graph_layer_is_dead(metrics) is True
+
+
+def test_graph_health_falls_back_to_median_for_legacy_payload():
+    """旧产物没有 graph_score_max 字段时，沿用旧判据，避免误报失效。"""
+    from src.report.metrics import graph_layer_is_dead
+
+    assert graph_layer_is_dead({"component_medians": {"G": 0.4}}) is False
+    assert graph_layer_is_dead({"component_medians": {}}) is True

@@ -56,6 +56,17 @@ def collect_metrics(root: str, benchmark_path: str = "") -> dict:
     risk_rows = risk.get("vehicles", []) if isinstance(risk, dict) else []
     risk_scores = [_to_float(row.get("risk_score_100")) for row in risk_rows]
 
+    # 图谱层健康度证据：只看"有图谱节点"的车辆（graph_available != 0），
+    # 否则非监管对象/键不匹配的 0 分会把最大值也拉平。
+    graph_scores = [
+        _to_float(row.get("graph_anomaly_index"))
+        for row in risk_rows
+        if _to_float(row.get("graph_available", 1)) != 0.0
+    ]
+    graph_available_nodes = sum(
+        1 for row in risk_rows if _to_float(row.get("graph_available", 1)) != 0.0
+    )
+
     def median_component(key: str) -> Optional[float]:
         values = [_to_float(row.get(key)) for row in risk_rows]
         return round(statistics.median(values), 3) if values else None
@@ -96,6 +107,12 @@ def collect_metrics(root: str, benchmark_path: str = "") -> dict:
             "G": median_component("graph_anomaly_index"),
             "T": median_component("time_freq_index"),
         },
+        # G 改为分位锚点标定后（P50→0、P99→1），中位数**按定义**就是 0，
+        # 不能再拿"中位数为 0"判定图谱层失效。真正能区分"失效"与"正常"的是
+        # 分布是否有区分度：最大值和可用节点数。
+        "graph_score_max": round(max(graph_scores), 4) if graph_scores else None,
+        "graph_available_nodes": graph_available_nodes,
+        "graph_calibration": (graph.get("graph_anomaly_calibration") if isinstance(graph, dict) else None),
         "evidence_total": evidence_total,
         "evidence_traced": evidence_traced,
         "evidence_trace_rate_percent": (
@@ -145,13 +162,25 @@ def render_markdown(metrics: dict) -> str:
 
 
 def graph_layer_is_dead(metrics: dict) -> bool:
-    """图谱异常指数中位数为 0（或缺失）时，说明图谱层没有贡献任何信号。
+    """判断图谱层是否真的没有贡献任何信号。
 
-    常见原因：图谱未构建，或图谱节点键与向量键不一致（曾发生过一次，
-    导致 G 全为 0 而没有任何报错）。
+    **口径变更（2026-11-20）**：G 已从 min-max 改为分位锚点标定（P50→0、P99→1），
+    因此中位数**按定义就是 0**，旧判据（``median == 0`` 即失效）会恒定误报。
+    新判据看分布是否有区分度：
+
+    - 没有任何可用图谱节点 → 失效；
+    - 最大值也是 0（所有车的 G 都归零）→ 失效；
+    - 否则正常（中位数为 0 是标定的预期结果，不是故障）。
+
+    兼容旧产物：没有 ``graph_score_max`` 字段时退回按中位数判断。
     """
-    median = (metrics.get("component_medians") or {}).get("G")
-    return not median
+    medians = metrics.get("component_medians") or {}
+    if "graph_score_max" in metrics:
+        if not metrics.get("graph_available_nodes"):
+            return True
+        top = metrics.get("graph_score_max")
+        return not top  # None 或 0.0 都视为失效
+    return not medians.get("G")
 
 
 def pick_top_risk(risk_payload: dict) -> dict:

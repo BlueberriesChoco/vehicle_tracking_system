@@ -66,10 +66,31 @@ def run_id_for(path: Path, root: Path) -> str:
 
 
 def _first(directory: Path, pattern: str) -> Optional[Path]:
+    """目录里最新的匹配文件。
+
+    **必须按 mtime 而不是文件名字母序。** 同名产物常有多个版本
+    （``risk_admin_in.json`` 与重跑后的 ``risk_admin_in_v2.json``），
+    字母序下 ``_v2`` 排在最后，``matches[0]`` 会永远返回旧版本——
+    实测控制台因此长期显示「15 中风险 / 最高 61.3 分」的旧口径数字，
+    而磁盘上更新的 ``_v2`` 已是「38 中风险 / 最高 80.2」。
+
+    平手时按名称兜底，保证结果可复现。
+    """
     if not directory.is_dir():
         return None
     matches = sorted(directory.glob(pattern))
-    return matches[0] if matches else None
+    if not matches:
+        return None
+    return max(matches, key=lambda path: (path.stat().st_mtime, path.name))
+
+
+def _risk_path(run_dir: Path) -> Optional[Path]:
+    """风险报告文件：兼容 ``risk_<camera>.json`` 与 ``risk.json`` 两种命名。"""
+    return _first(run_dir / "risk", "risk*.json")
+
+
+def _graph_path(run_dir: Path) -> Optional[Path]:
+    return _first(run_dir / "graphs", "graph*.json")
 
 
 def _read_csv_rows(path: Optional[Path]) -> List[dict]:
@@ -93,6 +114,31 @@ def _flag(value) -> bool:
     return str(value).strip() in {"1", "True", "true", "yes"}
 
 
+def _to_float(value, default=None):
+    """宽松转 float；无法转换时返回 ``default``（默认 None，用于区分"缺字段"与"值为 0"）。"""
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_analysis_target(record: dict) -> bool:
+    """该记录是否属于「监管对象」（``analysis_target != 0``）。
+
+    注意不能写成 ``str(value or "")``——``0`` 是 falsy，会被 ``or`` 吞成空串，
+    于是 ``analysis_target=0`` 的货车/两轮车被误判为监管对象。这正是
+    ``build_risk_report.py`` 里踩过的坑，这里用同样显式的写法。
+
+    字段缺失时视为监管对象：兼容旧产物（旧版没有这一列，所有车都参与了评分）。
+    """
+    value = record.get("analysis_target", None)
+    if value is None or value == "":
+        return True
+    return str(value).strip() not in {"0", "False", "false", "0.0"}
+
+
 def camera_display_name(camera: str) -> str:
     """机位中文名（来自 config/camera/<id>.yaml 的 camera_name）。"""
     if not camera:
@@ -108,13 +154,20 @@ def camera_display_name(camera: str) -> str:
 
 
 def build_headline(record: dict) -> str:
-    """一句话说明"为什么排在这里"。"""
+    """一句话说明"为什么排在这里"。
+
+    注意 G 的阈值语义：G 现在是**相对基线分布的锚点标定值**（P50→0、P99→1），
+    不是图内 min-max。旧口径下每张图必然产出一个 1.0，于是"本批最异常者"
+    恒得满分、必然触发"关系明显异常"的措辞，哪怕这批车全都正常。
+    因此这里还要求 ``graph_available`` 为真，避免把"无图谱数据"说成"关系正常/异常"。
+    """
     components = record.get("risk_components") or {}
     graph = float(components.get("G", 0) or 0)
     anomaly = float(components.get("A", 0) or 0)
     residual = float(record.get("traj_residual", 0) or 0)
+    graph_available = str(record.get("graph_available", 1)).strip() not in {"0", "False", "false", ""}
 
-    if graph >= 0.8:
+    if graph_available and graph >= 0.8:
         size = record.get("community_size")
         try:
             size_value = int(size)
@@ -161,18 +214,65 @@ def build_reasons(record: dict) -> List[dict]:
 
 
 def score_parts(record: dict) -> dict:
-    """把综合分拆成 A/G/T 三个来源，供界面显示"分从哪来"。"""
+    """把综合分拆成 A/G/T 三个来源，供界面显示"分从哪来"。
+
+    权重取自记录的 ``risk_components``（融合层已按分量可用性重归一化并写回），
+    因此这里显示的是**实际参与计算**的权重，而不是名义 α/β/γ。
+    若某分量不可用（如单窗口运行下的 T），会在 ``unavailable`` 里列出，
+    前端据此显示"无数据"而不是"0 分"。
+
+    **不要用 ``components.get("gamma", 0.25) or 0.25``**：重归一化后 γ 恰好是
+    ``0.0``，而 ``0.0`` 是 falsy，会被 ``or`` 回填成名义值 0.25——
+    界面上就变成"频次占 25% 权重"，与"该分量未参与"完全矛盾。
+    这与 ``build_risk_report.py`` 里 ``analysis_target=0`` 的坑是同一种错误。
+    """
     components = record.get("risk_components") or {}
-    weights = {"A": float(components.get("alpha", 0.4) or 0.4),
-               "G": float(components.get("beta", 0.35) or 0.35),
-               "T": float(components.get("gamma", 0.25) or 0.25)}
+
+    def _weight(name: str, nominal: float) -> float:
+        value = components.get(name, nominal)
+        try:
+            return float(value) if value is not None and value != "" else float(nominal)
+        except (TypeError, ValueError):
+            return float(nominal)
+
+    weights = {"A": _weight("alpha", 0.4), "G": _weight("beta", 0.35), "T": _weight("gamma", 0.25)}
     values = {"A": float(components.get("A", 0) or 0),
               "G": float(components.get("G", 0) or 0),
               "T": float(components.get("T", 0) or 0)}
     points = {key: round(100 * weights[key] * values[key], 1) for key in values}
-    total = round(sum(points.values()), 1)
+
+    available_flags = record.get("risk_component_available") or {}
+    unavailable = [
+        key for key in ("A", "G", "T")
+        if str(available_flags.get(key, 1)).strip() in {"0", "False", "false"}
+    ]
+
+    # 总分优先用融合层写回的 risk_score_100：它才是排序和分档的依据。
+    # 自己把三项加回去会因四舍五入产生 0.1 的偏差（实测 80.3 vs 80.2），
+    # 列表和详情显示的数字对不上，一线会怀疑哪一个是错的。
+    reported = _to_float(record.get("risk_score_100"), None)
+    total = round(reported, 1) if reported is not None else round(sum(points.values()), 1)
     shares = {key: (round(100 * points[key] / total) if total else 0) for key in points}
-    return {"points": points, "shares": shares, "total": total, "values": values}
+
+    # 证据封顶：只剩一路分量可用时，融合层把分数压到 75 分（低于 80 分档）。
+    # 界面必须说清"这是被压过的分"，否则一线看到 R=75 会当成原始分，
+    # 进而误判这辆车"离高风险只差 5 分"。
+    ceiling = _to_float(record.get("risk_score_ceiling"), 100.0)
+    capped = str(record.get("risk_score_capped", 0)).strip() in {"1", "True", "true"}
+    raw = _to_float(record.get("risk_score_raw_100"), None)
+
+    return {
+        "points": points,
+        "shares": shares,
+        "total": total,
+        "values": values,
+        "weights": {key: round(weights[key], 4) for key in weights},
+        "unavailable": unavailable,
+        "available_count": 3 - len(unavailable),
+        "ceiling": ceiling,
+        "capped": capped,
+        "raw_total": round(raw, 1) if raw is not None else None,
+    }
 
 
 def load_plate_overrides(run_dir: Path) -> dict:
@@ -260,10 +360,10 @@ def _model_version(run_dir: Path, manifest: dict) -> dict:
 
 def summarize_run(run_dir: Path, root: Path) -> dict:
     """轻量摘要（列表页用），按文件 mtime 缓存。"""
-    risk_path = _first(run_dir / "risk", "risk_*.json")
+    risk_path = _risk_path(run_dir)
     alerts_path = _first(run_dir / "alerts", "alerts*.csv")
     vectors_path = _first(run_dir / "alerts", "vectors*.csv")
-    graph_path = _first(run_dir / "graphs", "graph*.json")
+    graph_path = _graph_path(run_dir)
     manifest_path = run_dir / "run.json"
 
     stamps = tuple(
@@ -292,6 +392,17 @@ def summarize_run(run_dir: Path, root: Path) -> dict:
             break
     date_part = first_enter[:10] if first_enter else ""
 
+    # 非监管对象（货车/两轮车）单列在 non_target_vehicles，不计入 vehicle_count。
+    # 这里把两类车辆都报出来：只报监管对象会让人以为"这批复核只处理了 N 辆"，
+    # 而现场看到的实际过车数更多。
+    scored = risk.get("vehicles", []) or []
+    non_target = risk.get("non_target_vehicles", []) or []
+    non_target_count = risk.get("non_target_count")
+    if non_target_count is None:
+        # 旧产物没有分离：从 vehicles 里按 analysis_target 现算
+        non_target_count = sum(1 for row in scored if not _is_analysis_target(row))
+    total_vehicles = vehicles + (int(non_target_count) if non_target_count else 0)
+
     summary = {
         "id": run_id_for(run_dir, root),
         "name": run_dir.relative_to(root).as_posix() or ".",
@@ -299,12 +410,24 @@ def summarize_run(run_dir: Path, root: Path) -> dict:
         "camera_name": camera_name,
         "label": " · ".join(part for part in (camera_name, date_part, f"{vehicles} 辆") if part),
         "vehicles": vehicles,
+        "non_target_count": int(non_target_count or 0),
+        "non_target_listed": len(non_target),
+        "total_vehicles": total_vehicles,
         "alerts": alert_count,
         "alert_rate": round(100.0 * alert_count / vehicles, 2) if vehicles else None,
         "medium": risk.get("medium_risk"),
         "high": risk.get("high_risk"),
-        "evidence_total": sum(len(row.get("evidence", []) or []) for row in risk.get("vehicles", [])),
-        "risk_max": max((float(row.get("risk_score_100", 0) or 0) for row in risk.get("vehicles", []) or []), default=None),
+        "evidence_total": sum(len(row.get("evidence", []) or []) for row in scored),
+        "risk_max": max(
+            (float(row.get("risk_score_100", 0) or 0) for row in scored if _is_analysis_target(row)),
+            default=None,
+        ),
+        # 分量可用性与分数上限：告诉界面这次评分用了哪几路证据。
+        # 缺这一层，用户会把"只用了 1 路"当成"3 路都很干净"。
+        "components_available": risk.get("components_available"),
+        "score_ceiling": risk.get("score_ceiling"),
+        "score_capped_count": risk.get("score_capped_count"),
+        "risk_version": risk.get("version"),
         "model_version": version["model_version"],
         "model_declared": version["declared"],
         "calibrated": camera_calibrated(camera) if camera else False,
@@ -337,18 +460,32 @@ def run_detail(root: Path, run_id: str) -> Optional[dict]:
     if run_dir is None:
         return None
     summary = summarize_run(run_dir, root)
-    risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
-    graph = _read_json(_first(run_dir / "graphs", "graph*.json"))
+    risk = _read_json(_risk_path(run_dir))
+    graph = _read_json(_graph_path(run_dir))
     manifest = _read_json(run_dir / "run.json")
 
     detail = dict(summary)
     detail["parameters"] = manifest.get("params", {})
+    # G 能不能跨批次比较：训练图 == 评分图时只能当本批内部排序看。
+    # 旧图谱没有 graph_anomaly_self_referential 字段，按 method 回退推断：
+    # 只有 gae_baseline（加载了独立基线模型）才谈得上跨批次可比。
+    method = graph.get("graph_anomaly_method")
+    comparable = graph.get("graph_anomaly_comparable")
+    self_referential = graph.get("graph_anomaly_self_referential")
+    if self_referential is None and method:
+        self_referential = method != "gae_baseline"
+    if comparable is None and self_referential is not None:
+        comparable = not self_referential
+
     detail["graph"] = {
         "nodes": graph.get("node_count"),
         "edges": graph.get("edge_count"),
         "communities": len(graph.get("communities", []) or []),
         "modularity": graph.get("modularity"),
-        "method": graph.get("graph_anomaly_method"),
+        "method": method,
+        "comparable": comparable,
+        "self_referential": self_referential,
+        "calibration": graph.get("graph_anomaly_calibration"),
     }
     detail["checks"] = {
         "calibrated": summary["calibrated"],
@@ -364,8 +501,15 @@ def review_rows(root: Path, run_id: str, budget: int = 20, sort: str = "risk") -
     run_dir = find_run_dir(root, run_id)
     if run_dir is None:
         return None
-    risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
+    risk = _read_json(_risk_path(run_dir))
     vehicles = risk.get("vehicles", []) if isinstance(risk, dict) else []
+
+    # 非监管对象（货车/两轮车等 analysis_target=0）不参与行为基线、图谱与风险评分，
+    # 它们的 A/G/T 全为 0、没有 risk_score_100。若混进「待核查车辆」，
+    # 界面会显示成「可疑度 0 的正常车」，把"未评估"错述成"已评估且正常"。
+    # 新版风险报告已把它们分离到 non_target_vehicles，这里再做一层防御：
+    # 读到旧产物（未分离）时同样剔除，避免同一缺陷从另一个入口回来。
+    vehicles = [record for record in vehicles if _is_analysis_target(record)]
 
     # 三种排序口径：综合 R（默认）、个体行为 A、轨迹预测残差
     if sort == "behavior":
@@ -400,7 +544,7 @@ def vehicle_record(root: Path, run_id: str, passage_id: str) -> Optional[dict]:
     run_dir = find_run_dir(root, run_id)
     if run_dir is None:
         return None
-    risk = _read_json(_first(run_dir / "risk", "risk_*.json"))
+    risk = _read_json(_risk_path(run_dir))
     overrides = load_plate_overrides(run_dir)
     for record in risk.get("vehicles", []) or []:
         if str(record.get("passage_id", "")) == passage_id:

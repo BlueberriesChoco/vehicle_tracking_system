@@ -48,9 +48,9 @@ class TimeFrequencyScorer:
         night_ratio = _clip(_to_float(vector.get("night_ratio")))
         night_flag = 1.0 if _to_float(vector.get("is_night")) > 0 else 0.0
 
-        # 频次异常是“超出基线”的部分：单次通行（freq=1）是正常基线，不应算异常。
+        # 频次异常是"超出基线"的部分：单次通行（freq=1）是正常基线，不应算异常。
         # 旧实现用 freq / threshold，freq=1 也会得到 0.083，导致每辆正常车
-        # 都被写入一条“时间频率异常”证据。
+        # 都被写入一条"时间频率异常"证据。
         excess = max(frequency - 1.0, 0.0)
         frequency_component = _clip(excess / max(self.freq_threshold - 1.0, 1e-6))
         index = (
@@ -62,13 +62,33 @@ class TimeFrequencyScorer:
 
         record = dict(vector)
         record["time_freq_index"] = round(index, 4)
+        # 可用性标记：频次计数器只在单段视频内累加，passage_id 每车唯一时
+        # freq_count_24h 恒为 1，此时"频次"这一路根本没有信息量。
+        # 这里如实标注，让融合层决定是否剔除该分量，而不是把 0 混进加权和
+        # 当成"时间上很干净"。
+        record["time_freq_available"] = self._available(frequency, night_ratio, night_flag)
         record["time_freq_components"] = {
             "frequency": round(frequency_component, 4),
             "night_ratio": round(night_ratio, 4),
             "night_flag": night_flag,
             "freq_count_24h": frequency,
+            "available": record["time_freq_available"],
         }
         return record
+
+    def _available(self, frequency: float, night_ratio: float, night_flag: float) -> int:
+        """判断 T 是否携带信息。
+
+        三种情况视为**不可用**（返回 0）：
+        1. 频次列缺失或恒为 1（单窗口运行，计数器拿不到跨窗口真值）；
+        2. 夜间占比与夜间标记都为 0（本批全是白天，夜里那两路无从判断）。
+
+        只要有一路有信息就算可用：频次 > 1 说明确实观察到重复通行，
+        或者数据落在夜间（夜间规则本身可判定）。
+        """
+        has_frequency = frequency > 1.0
+        has_night = night_flag > 0 or night_ratio > 0
+        return 1 if (has_frequency or has_night) else 0
 
     def score(self, vectors: Sequence[dict]) -> List[dict]:
         return [self.score_one(vector) for vector in vectors]

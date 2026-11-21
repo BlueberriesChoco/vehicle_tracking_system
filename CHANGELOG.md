@@ -23,8 +23,11 @@
 | 三、关系图谱 | ✅ 3 类边 + SVD/GAE + Louvain | 432 节点 / 1427 边 / 105 社区 / Q=0.7348 |
 | 四、融合与报告 | ✅ R=αA+βG+γT + 证据链 + 模板/本地 LLM | 1276 条证据，可追溯 100% |
 
-**实测数字**：41 告警（9.23%）、8 中风险 / 0 高风险、R∈[0, 59.0]、端到端 8.4 路、
+**实测数字**：41 告警（9.23%）、1 高风险 / 30 中风险、R∈[0, 80.0]、端到端 8.4 路、
 延迟 23.1 s、增量更新 5.06 s、带宽压缩 462 倍。
+
+> 报数口径变更（2026-11-20）：风险分已改为「分量可用性重归一化 + 分位锚点标定」，
+> 旧口径下的「8 中风险 / 0 高风险 / R max 59.0」**不再可比**，详见下方对应条目。
 
 **23 项技术指标**：✅ 6 项已实测 / 🟡 10 项待外部输入 / 🟠 2 项未达标 / 🔴 5 项无数据。
 详见 [`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)，逐项复现路径见
@@ -32,16 +35,146 @@
 
 **已知的结构性限制**（不是待办，是当前数据的客观约束）：
 
-- **T 维度恒为 0**：`freq_count_24h` 依赖车牌身份，444 辆里仅 2 辆有 `plate_hash`；
-  且 66 分钟内每车只通行 1 次。所以 R 实际只有 A、G 两项在起作用。
+- **T 维度不可用**：`freq_count_24h` 依赖车牌身份，444 辆里仅 2 辆有 `plate_hash`
+  （0.45%）；且 66 分钟内每车只通行 1 次。现已如实标记 `time_freq_available=0`
+  并由融合层剔除，不再当作"时间上很干净"参与加权。
 - **无监督模型的特征空间被削掉大半**：未标定导致速度/路径类特征被 `*_reliable=0` 门控，
   本段数据又无停留、无夜间车，IF 实际只用到 `duration_sec` 等少数字段。
 - **融合是"图优先"**：标称 α=0.4 > β=0.35，但 A 的上界是 0.822、G 是 1.0，
   实际最大贡献 G(0.350) > A(0.329)。
 
-**工程质量**：253 个单元测试、`scripts/ci.ps1` 6 步全绿、`scripts/delivery_check.py` 5 项门禁。
+**工程质量**：366 个单元测试、`scripts/ci.ps1` 6 步全绿、`scripts/delivery_check.py` 5 项门禁。
 
 ## 2026-11-20
+
+### 风险分标定：分量可用性重归一化 + G 改分位锚点（修复 R 上限 75 分与跨图不可比）
+
+#### 三个同源问题
+
+代码核查发现三处缺陷，本质都是「把"没有数据"当成了"数值为 0"」：
+
+1. **R 的数学上限只有 75 分**（`src/risk/fusion.py`）
+   单窗口运行时 `freq_count_24h` 恒为 1、夜间标记恒为 0，T 恒为 0；
+   而 `γ=0.25` 仍固定作用其上，`R_max = 100×(0.4+0.35) = 75.0`。
+   80 分档在结构上不可达，与数据量无关。
+
+2. **G 是图内相对分，跨图不可比**（`src/graph/anomaly.py`、`src/graph/gae.py`）
+   `minmax_normalize` 必然让每张图产出一个 1.0 和一个 0.0，
+   于是"本批最异常者"恒得满分。实测 432 辆里 G≥0.8 有 26 辆（6.0%），
+   但 4.6 节已证明该机位物理上不存在聚集异常（重叠对 1/93096、最大同屏 2 辆）。
+   控制台 `build_headline` 据 `G>=0.8` 给出的"关系明显异常"措辞是归一化造出来的。
+
+3. **T 的频次输入从未真正接上**：唯一能算跨窗口真值的 `DailyAggregator`
+   全项目无人实例化，只被 `__init__.py` import 过。
+
+#### 改动
+
+- **新增 `src/graph/calibration.py`**：分位锚点标定 `anchor_normalize`
+  （P50→0、P99→1，超出 clip）。与 min-max 的关键差别是锚点来自**参考分布**，
+  因此同一分数在不同批次/不同节点数上得到同一标定值。
+- **`gae.py`**：`fit` 阶段就在基线图上取好锚点存进 `calibration_anchors_`，
+  随模型持久化（`.json` 里 `calibration_anchors` / `calibration_percentiles`）；
+  `score` 用基线锚点而非本图重算。锚点缺失时回退本图自标定，
+  并在 `calibration.source` 标注 `baseline` / `self`。
+- **`anomaly.py`**：SVD 分支同样改用锚点标定，新增 `anchors` 参数。
+- **新增 `src/risk/repeat_frequency.py`**：按稳定身份键（`plate_hash` →
+  `global_vehicle_id` → `camera:plate_number`）统计跨窗口通行次数；
+  身份键覆盖率低于阈值时**不改写** `freq_count_24h` 并标记不可用。
+- **`fusion.py`**：`RiskFusion` 新增 `available_components` / `effective_weights`，
+  按批次剔除不可用分量并把剩余权重按比例放大到 1；输出 `risk_component_available`。
+  `renormalize=False` 可退回旧行为。
+- **`time_frequency.py`**：输出 `time_freq_available`（频次>1 或落在夜间才算可用）。
+- **新增 `src/graph/features.py`**：收敛 `anomaly.py` 与 `gae.py` 两份逐行等价的
+  聚类系数实现（技术债）。
+- **`report.py`**：T 不可用时显示"时间频率 无数据"，而不是"0.00"。
+- **`server.py`**：`build_headline` 增加 `graph_available` 前置判断；
+  `score_parts` 输出实际权重与 `unavailable` 列表。
+- **`report_metrics.py` / `metrics.py`**：图谱层健康度判据从"中位数为 0"改为
+  "最大值是否为 0 且有可用节点"——标定后中位数为 0 是**预期**结果。
+- **非监管对象分离**（`build_risk_report.py`）：`analysis_target=0` 的车辆
+  不再进入风险评分，单列到 `non_target_vehicles` 并如实标注"未参与评分"。
+  此前 12 辆货车/两轮车 A/G/T 全 0，报告却写"风险较低、未发现异常、可作常规抽查"。
+
+#### 实测（66 分钟真实数据，432 辆监管对象）
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| R 上限 | 75.0（结构性） | **100.0** |
+| R 实测最大值 | 59.0 | **80.2** |
+| 高风险 / 中风险 | 0 / 15 | **1 / 38** |
+| R 中位数 | 37.8 | **26.7** |
+| G 中位数 | 0.511 | **0.0006** |
+| G ≥ 0.8 车辆数 | 23 | **18（4.2%）** |
+| 新旧排序 Spearman | — | **0.844**（排序基本保持） |
+
+> 上表为重建图谱后重跑的结果（`risk_admin_in_v2.json`）。旧报告的 443 辆口径
+> 含 11 辆非监管对象未分离，中风险数与本次不可直接对比。
+
+#### 二次修正：单路证据封顶
+
+改完之后跑 CI 冒烟，发现重归一化自己造了个新问题：**15 辆样本里 A 与 T 都不可用，
+只剩 G，权重被放大到 1.0，`R` 退化成 G 的原值**，于是一辆 `G=1.0` 的车直接得 100 分、
+判为高风险——冒烟输出里凭空多出 2 辆"高风险"。
+
+问题不在数学而在语义：100 分声称的是"最大异常"，而单源信号没有任何旁证。
+因此引入 `evidence_ceiling`：**只用一路分量时分数封顶 75 分（低于 80 分档），
+即"高风险必须至少两路独立证据"**。两路及以上不折扣——缺失的第三路在本项目是
+结构性缺失（无车牌即无 T），折扣会反过来压低真实高分。
+
+- `fusion.py`：新增 `score_ceiling()` 与 `evidence_ceiling = {3:100, 2:100, 1:75}`；
+  输出新增 `risk_score_ceiling` / `risk_score_raw_100` / `risk_score_capped`，
+  被压过的车保留原始分，可回溯。
+- `build_risk_report.py`：JSON 输出 `score_ceiling` / `score_capped_count`，
+  Markdown 报告加一行"分数上限 + 触顶车数"，日志单独 warn。
+- `report.py`：正文增加"分数已封顶：原始加权分 X，因仅 N 路分量可用，
+  按证据充分性压至 75 分"。
+
+验证：CI 冒烟 `R max` 从 **100.0 → 75.0**、高风险 **2 → 0**；
+真实数据（A、G 两路可用）不受影响，仍是 1 辆高风险、R max 80.2。
+
+#### 二次修正：`graph_anomaly_comparable` 判据错误
+
+`payload.py` 里这个字段原先写成 `calibration["source"] == "baseline"`。但 GAE 的
+`fit` 总会记录锚点，`score` 随之走 baseline 分支——**同图训练时 `source` 也是
+`"baseline"`**，于是自参照被误标成"可比"。实测 `build_graph.py --method gae`
+（不传 `--gae-model`）输出的 `graph_admin_in_gae.json` 报 `comparable=true`，
+可它的训练图就是评分图。
+
+判据改为「训练图是否就是评分图」，由 payload 层自己记录（`self_referential`），
+不再从 `calibration.source` 反推；同时新增 `graph_anomaly_self_referential` 字段
+与之互为反面，避免下游各读一个得出矛盾结论。验证：
+
+```text
+同图训练（--method gae）           comparable=false  self_referential=true
+加载基线模型（--gae-model）        comparable=true   self_referential=false
+SVD 分支                          comparable=false  self_referential=true
+```
+
+#### 验证
+
+```text
+pytest -q                366 passed（原 309，新增 57）
+scripts/ci.ps1           CI PASSED（6/6，冒烟 15 车）
+compileall src scripts   通过
+```
+
+#### 已知限制
+
+- 重归一化只解决"分数够不够到 80 分"，**不解决"该不该报 80 分"**——
+  后者仍需违规标注（指标 14/15 的原始缺口）。
+- 本批车牌识别率 0.90%（443 辆仅 4 辆有 `plate_hash`），T 在真实数据上必然不可用；
+  报告会如实输出 `time_freq_available=0` 与重归一化后的权重。
+- **历史报数不可比**：旧口径的"15 中风险 / 最高 61.3 分"需按新口径重算。
+- **GAE 同图训练时 G 仍只能当相对排序看**：不传 `--gae-model` 时训练图 == 评分图，
+  误差带被压缩（实测 `p99/p50 = 1.053`，SVD 分支 1.376），窄带被标定放大，
+  G≥0.8 节点数偏多（38 辆）。已按 P75/P90/P95 各档调过分位，改善有限——
+  **调分位治不了自参照**。`graph_anomaly_comparable=false` 会如实标注这一点。
+  要真正可比，需先跑一次基线图训练并存模型（`--save-gae-model`），
+  后续批次用 `--gae-model` 复用。
+- **对称图上锚点会退化**：环、全连接团这类节点特征逐位相同的图，
+  所有节点重构误差全等，`P50 == P99`。此时 `anchor_normalize` 返回全 0
+  而非放大噪声，表达"本图没有可区分的异常"。这是契约不是缺陷，
+  由 `tests/test_gae.py::test_symmetric_graph_yields_degenerate_anchors` 固化。
 
 ### 车牌链路：人工确认入口 + 排序分构成透明化
 

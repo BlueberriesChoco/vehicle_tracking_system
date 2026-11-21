@@ -42,8 +42,8 @@
 
 | # | 指标 | 状态 | 验证方式 | 产物 / 命令 |
 |---|---|---|---|---|
-| 14 | R 的 AUC≥0.90 | 🔴 | 无高风险标注 | `python scripts/report_metrics.py` → 中风险 8 / 高风险 0，R∈[0,59.0] |
-| 15 | R≥80 精确率≥75% | 🔴 | 同上；真实数据未触达 80 分 | 同上（`risk_max`） |
+| 14 | R 的 AUC≥0.90 | 🔴 | 无高风险标注（分数可达性已修，标注仍缺） | `python scripts/build_risk_report.py` → 中风险 38 / 高风险 1，R∈[0,80.2] |
+| 15 | R≥80 精确率≥75% | 🔴 | 同上；分数现已能触达 80（1 辆），但无标注可判精确率 | 同上（`risk_max`）；注意仅单路分量可用时封顶 75 分，本批 A/G 两路可用未触发 |
 | 16 | 证据链准确率≥90% | ✅ | 每条证据是否带 `trace.source_file` | `python scripts/report_metrics.py` → **1276/1276 = 100%** |
 | 17 | LLM 事实还原≥95%、幻觉<2% | 🟡 | 数字白名单校验，不通过自动回退模板 | `tests/test_risk.py::test_report_service_falls_back_on_hallucinated_llm_output` |
 | 18 | 端到端延迟≤2 分钟 | ✅ | 1 分钟片段全链路计时 | `python scripts/run_full_pipeline.py --input <60s片段>` → **23.1s**；分窗 18.6–27.8s |

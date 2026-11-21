@@ -14,21 +14,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from .normalize import minmax_normalize
-
-
-def _clustering_coefficient(binary_adjacency: np.ndarray) -> np.ndarray:
-    n = binary_adjacency.shape[0]
-    coefficients = np.zeros(n, dtype=np.float64)
-    for i in range(n):
-        neighbors = np.nonzero(binary_adjacency[i])[0]
-        degree = int(neighbors.size)
-        if degree < 2:
-            continue
-        subgraph = binary_adjacency[np.ix_(neighbors, neighbors)]
-        links = float(subgraph.sum()) / 2.0
-        coefficients[i] = links / (degree * (degree - 1) / 2.0)
-    return coefficients
+from .calibration import fit_and_calibrate
+from .features import clustering_coefficient
 
 
 def low_rank_reconstruction(adjacency: np.ndarray, rank: Optional[int] = None) -> np.ndarray:
@@ -55,15 +42,31 @@ def graph_anomaly_index(
     adjacency: np.ndarray,
     community: Optional[np.ndarray] = None,
     rank: Optional[int] = None,
+    anchors: Optional[Dict[str, float]] = None,
 ) -> Dict[str, np.ndarray]:
     """计算每个节点的图异常指数 G 及支撑证据。
 
+    G 的标定口径（2026-11-20 修正）：**不再用 min-max**。
+    ``minmax_normalize`` 会让每张图必然产出一个 1.0 和一个 0.0，
+    于是"本批最异常的车"恒得满分，与这批车是否真有异常无关，
+    也无法跨批次比较。改为分位锚点标定：
+
+    - 传入 ``anchors``（来自基线图 ``quantile_anchors``）→ 用基线锚点标定，跨批次可比；
+    - 不传 ``anchors`` → 以本图 P50/P99 自标定，仅保证档位语义、不保证跨批可比。
+
+    Args:
+        adjacency: 加权邻接矩阵。
+        community: 社区划分（当前仅作接口保留，未参与打分）。
+        rank: 低秩截断秩。
+        anchors: 分位锚点 ``{"low":..., "high":...}``。
+
     Returns:
         dict，包含:
-        - ``graph_anomaly_index``: [0,1] 图异常指数 G
+        - ``graph_anomaly_index``: [0,1] 图异常指数 G（锚点标定后）
         - ``reconstruction_error``: 低秩重构残差（G 的原始值）
         - ``degree``: 加权度
         - ``clustering``: 聚类系数
+        - ``calibration``: 本次使用的锚点，便于回溯
     """
     A = np.array(adjacency, dtype=np.float64, copy=True)
     n = A.shape[0]
@@ -74,6 +77,7 @@ def graph_anomaly_index(
             "reconstruction_error": empty,
             "degree": empty,
             "clustering": empty,
+            "calibration": {"low": 0.0, "high": 0.0, "n": 0},
         }
 
     np.fill_diagonal(A, 0.0)
@@ -81,11 +85,20 @@ def graph_anomaly_index(
     reconstruction_error = np.linalg.norm(A - approximation, axis=1)
     degree = A.sum(axis=1)
     binary = (A > 0).astype(np.float64)
-    clustering = _clustering_coefficient(binary)
+    clustering = clustering_coefficient(binary)
+
+    if anchors:
+        from .calibration import anchor_normalize
+
+        calibrated = anchor_normalize(reconstruction_error, anchors)
+        used = dict(anchors)
+    else:
+        calibrated, used = fit_and_calibrate(reconstruction_error)
 
     return {
-        "graph_anomaly_index": minmax_normalize(reconstruction_error),
+        "graph_anomaly_index": calibrated,
         "reconstruction_error": reconstruction_error,
         "degree": degree,
         "clustering": clustering,
+        "calibration": used,
     }

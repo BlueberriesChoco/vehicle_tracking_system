@@ -72,12 +72,21 @@ function renderKpis(detail) {
     { label: "高风险", value: detail.high ?? "—" },
     { label: "证据可追溯", value: detail.evidence_total ?? "—" },
   ];
+  // 非监管对象（货车/两轮车）没有风险分，单独列出而不是混进"通过车辆"里，
+  // 否则用户会以为这些车都评估过、都正常。
+  if (detail.non_target_count) {
+    items.push({ label: "非监管对象", value: detail.non_target_count, hint: "未参与评分" });
+  }
   const wrap = $("kpis");
   wrap.innerHTML = "";
   for (const item of items) {
     const cell = el("div", "kpi");
     cell.appendChild(el("div", "value", String(item.value)));
     cell.appendChild(el("div", "label", item.label));
+    if (item.hint) {
+      cell.appendChild(el("div", "kpi-hint", item.hint));
+      cell.classList.add("kpi-muted");
+    }
     wrap.appendChild(cell);
   }
 }
@@ -101,19 +110,24 @@ function renderReview(rows) {
     tr.dataset.pid = row.passage_id;
     if (state.activeVehicle === row.passage_id) tr.classList.add("active");
 
-    const cells = [
-      ["#", row.rank, "dim"],
-      ["车辆", row.display_name, "vehicle"],
-      ["通过时间", fmtTime(row.enter_time), "dim"],
-      ["时长", row.duration_sec === "" ? "—" : `${row.duration_sec}s`, "dim"],
-      ["可疑度", row.risk_score_100, "score"],
-      ["主要原因", row.reason || "—", "reason"],
-    ];
-    for (const [label, value, cls] of cells) {
-      const td = el("td", cls, value === undefined || value === null || value === "" ? "—" : String(value));
-      td.title = label;
-      tr.appendChild(td);
+    // 可疑度后面加封顶标记：列表里 R=75 和"被压到 75"是两回事，
+    // 不加标记会被读成"离高风险只差 5 分"。
+    const capped = Boolean(row.parts && row.parts.capped);
+    const scoreCell = el("td", "score", String(row.risk_score_100 ?? "—"));
+    if (capped) {
+      scoreCell.classList.add("score-capped-cell");
+      scoreCell.appendChild(el("span", "capped-flag", "封顶"));
+      scoreCell.title = `原始加权分 ${row.parts.raw_total}，因证据不足压至 ${row.parts.ceiling}`;
     }
+    tr.appendChild(el("td", "dim", String(row.rank ?? "—")));
+    tr.appendChild(el("td", "vehicle", row.display_name ?? "—"));
+    tr.appendChild(el("td", "dim", fmtTime(row.enter_time)));
+    tr.appendChild(el("td", "dim", row.duration_sec === "" || row.duration_sec == null ? "—" : `${row.duration_sec}s`));
+    tr.appendChild(scoreCell);
+    const reasonCell = el("td", "reason", row.reason || "—");
+    reasonCell.title = row.reason || "";
+    tr.appendChild(reasonCell);
+
     tr.addEventListener("click", () => selectVehicle(row.passage_id));
     tbody.appendChild(tr);
   }
@@ -219,13 +233,44 @@ function renderDetail(record) {
   const parts = display.parts;
   if (parts) {
     const comp = el("div", "score-parts");
-    comp.appendChild(
-      el(
-        "div",
-        "score-parts-title",
-        `排序分 ${parts.total}　=　关系 ${parts.points.G}（${parts.shares.G}%）　+　行为 ${parts.points.A}（${parts.shares.A}%）　+　频次 ${parts.points.T}（${parts.shares.T}%）`
-      )
-    );
+
+    // 可用分量才列出来；不可用的显示"无数据"而不是"0.00"，
+    // 否则会被读成"这一项很干净"，而实际是"这一项没算"。
+    const labels = { G: "关系", A: "行为", T: "频次" };
+    const segments = [];
+    for (const key of ["G", "A", "T"]) {
+      const missing = (parts.unavailable || []).includes(key);
+      segments.push(
+        missing
+          ? `${labels[key]} 无数据`
+          : `${labels[key]} ${parts.points[key]}（${parts.shares[key]}%）`
+      );
+    }
+    comp.appendChild(el("div", "score-parts-title", `排序分 ${parts.total}　=　${segments.join("　+　")}`));
+
+    // 封顶必须显式说出来：否则 R=75 会被当成原始分，误判"离高风险只差 5 分"
+    if (parts.capped) {
+      comp.appendChild(
+        el(
+          "div",
+          "score-capped",
+          `分数已封顶：原始加权分 ${parts.raw_total} 分，因仅 ${parts.available_count} 路分量可用，按证据充分性压至 ${parts.ceiling} 分。高风险需至少两路独立证据。`
+        )
+      );
+    }
+
+    // 权重透明度：让一线知道哪一路在主导，以及缺的那一路本来占多少
+    const weights = parts.weights || {};
+    if (Object.keys(weights).length) {
+      const weightText = ["A", "G", "T"]
+        .map((key) => {
+          const missing = (parts.unavailable || []).includes(key);
+          return `${key}=${weights[key]}${missing ? "（未参与）" : ""}`;
+        })
+        .join("　");
+      comp.appendChild(el("div", "score-weights", `实际权重　${weightText}`));
+    }
+
     if (state.detail && state.detail.checks && !state.detail.checks.calibrated) {
       comp.appendChild(
         el(
@@ -298,7 +343,38 @@ async function selectRun(runId) {
   if (detail.checks && !detail.checks.calibrated) status.push("未标定");
   if (detail.checks && detail.checks.in_sample) status.push("样本内训练");
   setSysStatus(status);
-  setBanner(status.length ? "提示：本批次为" + status.join("、") + "，结果仅供排查参考，不作为考核结论。" : "");
+
+  // 顶部横幅要说清"这次评分用了哪几路证据"。只写"未标定"不够——
+  // 用户还需要知道哪一路没数据、分数上限是多少，否则会把"只用了 1 路"
+  // 读成"3 路都很干净"。
+  const banners = [];
+  if (status.length) {
+    banners.push(`本批次为${status.join("、")}，结果仅供排查参考，不作为考核结论。`);
+  }
+
+  const available = detail.components_available || null;
+  if (available) {
+    const missing = ["A", "G", "T"].filter((key) => available[key] === false);
+    if (missing.length) {
+      const names = missing.map((key) => ({ A: "行为", G: "关系", T: "频次" })[key]);
+      banners.push(`本次评分未使用：${names.join("、")}（无可用数据），权重已在剩余分量间按比例重分配。`);
+    }
+  }
+  if (detail.score_ceiling && detail.score_ceiling < 100) {
+    const usable = available ? ["A", "G", "T"].filter((key) => available[key] !== false).length : null;
+    const usableText = usable === null ? "" : `仅 ${usable} 路分量可用，`;
+    const cappedText = detail.score_capped_count ? `（本批 ${detail.score_capped_count} 辆触顶）` : "";
+    banners.push(
+      `分数上限 ${detail.score_ceiling} 分：${usableText}高风险需至少两路独立证据${cappedText}。`
+    );
+  }
+  if (detail.graph && detail.graph.comparable === false && detail.graph.self_referential) {
+    banners.push(
+      "图谱「关系分」为本批自身标定（训练图即评分图），只能用于批内排序，不可与其他批次横向比较。"
+    );
+  }
+
+  setBanner(banners.join("　"));
 
   const budget = Number($("budget").value || 20);
   const rows = await api(`/api/runs/${encodeURIComponent(runId)}/review?budget=${budget}&sort=${sortValue()}`);

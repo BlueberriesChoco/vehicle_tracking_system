@@ -42,6 +42,7 @@ from src.risk import (
     ReportService,
     RiskFusion,
     TimeFrequencyScorer,
+    apply_passage_counts,
 )
 from src.risk.merge import apply_graph
 from src.utils.logger import get_logger
@@ -225,8 +226,19 @@ def main():
     detected = apply_graph(detected, graph_payload)
 
     # ---- 6. 风险融合 + 报告 ----
+    # 先用跨窗口身份键重算通行频次；覆盖率不足时 T 会被标记不可用，
+    # 融合层随即将权重重归一化，避免 γ 变成死权重（R 上限 75 分的根因）。
+    detected, freq_summary = apply_passage_counts(detected)
     scored = TimeFrequencyScorer().score(detected)
-    fused = RiskFusion(alpha=args.alpha, beta=args.beta, gamma=args.gamma).fuse(scored)
+    fusion = RiskFusion(alpha=args.alpha, beta=args.beta, gamma=args.gamma)
+    available = fusion.available_components(scored)
+    weights = fusion.effective_weights(available)
+    if not available.get("T"):
+        logger.warning(
+            "T 分量不可用（身份键覆盖率 %.2f%%）；权重重归一化为 α=%.3f β=%.3f γ=%.3f",
+            freq_summary["coverage"] * 100, weights["A"], weights["G"], weights["T"],
+        )
+    fused = fusion.fuse(scored, weights=weights)
     enriched = EvidenceBuilder().build_many(fused)
     service = ReportService(llm=LocalLLMReportGenerator(endpoint=args.llm_endpoint))
     for record in enriched:
@@ -244,6 +256,13 @@ def main():
                 "vehicle_count": len(enriched),
                 "high_risk": sum(1 for r in enriched if r["risk_level"] == "high"),
                 "medium_risk": sum(1 for r in enriched if r["risk_level"] == "medium"),
+                "components_available": available,
+                "effective_weights": {
+                    "alpha": round(weights["A"], 4),
+                    "beta": round(weights["G"], 4),
+                    "gamma": round(weights["T"], 4),
+                },
+                "passage_frequency": freq_summary,
                 "vehicles": enriched,
             },
             f,
@@ -255,7 +274,13 @@ def main():
         f.write(f"# 行政通道车辆风险排查报告（{args.camera}）\n\n")
         f.write(f"- 车辆总数：{len(enriched)}\n")
         f.write(f"- 高风险：{sum(1 for r in enriched if r['risk_level'] == 'high')}\n")
-        f.write(f"- 中风险：{sum(1 for r in enriched if r['risk_level'] == 'medium')}\n\n")
+        f.write(f"- 中风险：{sum(1 for r in enriched if r['risk_level'] == 'medium')}\n")
+        if not available.get("T"):
+            f.write(
+                f"- 说明：T 分量不可用（身份键覆盖率 {freq_summary['coverage']:.1%}），"
+                f"权重已重归一化为 α={weights['A']:.3f} β={weights['G']:.3f} γ={weights['T']:.3f}\n"
+            )
+        f.write("\n")
         for record in enriched:
             f.write(record["report_text"] + "\n\n")
 

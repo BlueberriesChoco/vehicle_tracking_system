@@ -188,18 +188,21 @@
 | 文件 | 作用 |
 |---|---|
 | `src/graph/relations.py` | 关系抽取。轨迹解析/重采样、形状相似度、时间重叠，构建共现/跟随/路径相似三类边。 |
-| `src/graph/payload.py` | 图谱载荷组装（节点/社区/边），脚本共用唯一实现。 |
+| `src/graph/payload.py` | 图谱载荷组装（节点/社区/边），脚本共用唯一实现。输出 `graph_anomaly_comparable` / `graph_anomaly_self_referential` 标注 G 能否跨批次比较——判据是「训练图是否就是评分图」，**不能**看 `calibration.source`（GAE 的 `fit` 总写锚点，同图训练时 source 也是 baseline，会误标成可比）。 |
 | `src/graph/community.py` | 纯 NumPy Louvain 社区发现，附模块度和社区摘要。 |
-| `src/graph/anomaly.py` | 图异常指数 G。邻接矩阵低秩 SVD 重构残差（线性图自编码器基线），输出度与聚类系数。 |
-| `src/graph/gae.py` | 图自编码器 GAE。**特征驱动 GCN**（4 维结构特征 + 归一化邻接传播，参数与节点数无关），边掩码 + 负采样训练；支持基线图训练、目标图评分。可选 `--method gae`。 |
+| `src/graph/anomaly.py` | 图异常指数 G。邻接矩阵低秩 SVD 重构残差（线性图自编码器基线），输出度与聚类系数。G 用分位锚点标定而非 min-max。 |
+| `src/graph/gae.py` | 图自编码器 GAE。**特征驱动 GCN**（4 维结构特征 + 归一化邻接传播，参数与节点数无关），边掩码 + 负采样训练；支持基线图训练、目标图评分。`fit` 阶段在基线图上取分位锚点并随模型持久化。可选 `--method gae`。 |
+| `src/graph/calibration.py` | **分位锚点标定**。`quantile_anchors` 从参考分布取 P50/P99，`anchor_normalize` 映射到 [0,1]。锚点来自参考分布而非本批数据，因此跨批次可比；数值超出锚点则 clip，不放大。 |
+| `src/graph/features.py` | 图谱结构特征（聚类系数、二值化）。原 `anomaly.py` 与 `gae.py` 各有一份逐行等价的实现，已收敛至此。 |
 | `src/graph/__init__.py` | graph 包导出文件。 |
 
 ## `src/risk/` 风险融合与报告模块（研究要点四）
 
 | 文件 | 作用 |
 |---|---|
-| `src/risk/time_frequency.py` | 时间频率异常指数 T（频次、夜间占比、夜间标记）。 |
-| `src/risk/fusion.py` | 风险融合 `R = αA + βG + γT`，输出 0~100 分与风险等级。 |
+| `src/risk/time_frequency.py` | 时间频率异常指数 T（频次、夜间占比、夜间标记），并输出 `time_freq_available` 说明该分量是否真的算得出。 |
+| `src/risk/repeat_frequency.py` | **跨窗口通行频次**。按稳定身份键（`plate_hash` → `global_vehicle_id` → `camera:plate_number`）统计次数；覆盖率不足时如实标记不可用，不改写 `freq_count_24h`。 |
+| `src/risk/fusion.py` | 风险融合 `R = αA + βG + γT`，输出 0~100 分与风险等级。按批次检测分量可用性，剔除不可用分量后把剩余权重按比例放大（否则 γ 会成为死权重，R 上限只有 75 分）。**单路证据封顶**：只剩一路分量可用时分数压到 75 分（低于 80 分档），即"高风险必须至少两路独立证据"——否则该路权重被放大到 1.0，`R` 退化成它的原值，会出现伪 100 分。输出 `risk_score_ceiling` / `risk_score_raw_100` / `risk_score_capped` 以便回溯。 |
 | `src/risk/evidence.py` | 结构化证据链，每条证据可回溯到具体向量记录。 |
 | `src/risk/report.py` | 模板报告与本地大模型报告适配器，失败自动回退模板。 |
 | `src/risk/merge.py` | 风险合并：图谱异常/社区信息、跨机位伙伴与全局 ID。 |

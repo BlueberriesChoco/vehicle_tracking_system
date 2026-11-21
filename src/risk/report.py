@@ -198,14 +198,30 @@ class TemplateReportGenerator:
         lines.append(f"- 通行地点：{record.get('camera_id', '')} 行政车道")
         # graph_available=0 表示该车没有图谱节点（例如图谱与向量键不一致），
         # 此时不能写成“图 0.00”，否则会被误读为“图异常很低”。
-        graph_available = str(record.get("graph_available", 1)).strip() not in {"0", "False", "false"}
+        graph_available = str(record.get("graph_available", 1)).strip() not in {"0", "False", "false", ""}
         graph_text = f"图 {_to_float(components.get('G')):.2f}" if graph_available else "图 无数据"
+
+        # T 同理：单窗口运行时频次计数器拿不到跨窗口真值，T 恒为 0 并不代表
+        # "时间上正常"，而是"没有可用输入"。区分这两者对一线研判很重要。
+        comp_available = record.get("risk_component_available") or {}
+        t_available = str(comp_available.get("T", 1)).strip() not in {"0", "False", "false", ""}
+        t_text = f"时间频率 {_to_float(components.get('T')):.2f}" if t_available else "时间频率 无数据"
+
         lines.append(
             f"- 风险构成：行为 {_to_float(components.get('A')):.2f} / "
             f"{graph_text} / "
-            f"时间频率 {_to_float(components.get('T')):.2f}，"
+            f"{t_text}，"
             f"综合 R = {record.get('risk_score_100', 0):.1f} 分"
         )
+        # 封顶要写进正文：否则一线看到"R = 75.0"会以为这就是原始分，
+        # 而它其实是被证据充分性压下来的。原始分一并给出来，才可回溯。
+        if str(record.get("risk_score_capped", 0)).strip() in {"1", "True", "true"}:
+            lines.append(
+                f"- 分数已封顶：原始加权分 {_to_float(record.get('risk_score_raw_100')):.1f} 分，"
+                f"因仅 {sum(1 for k in ('A', 'G', 'T') if str(comp_available.get(k, 1)).strip() not in {'0', 'False', 'false', ''})} "
+                f"路分量可用，按证据充分性压至 {_to_float(record.get('risk_score_ceiling')):.0f} 分"
+                f"（高风险需至少两路独立证据）"
+            )
         if record.get("_source_file"):
             lines.append(f"- 数据来源：`{record['_source_file']}`")
         if record.get("global_vehicle_id") not in (None, ""):

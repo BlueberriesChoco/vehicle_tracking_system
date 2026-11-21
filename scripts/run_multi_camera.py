@@ -40,7 +40,7 @@ from src.pipeline.global_identity import (
     merge_passages,
     merge_risk_records,
 )
-from src.risk import EvidenceBuilder, RiskFusion, TimeFrequencyScorer
+from src.risk import EvidenceBuilder, RiskFusion, TimeFrequencyScorer, apply_passage_counts
 from src.trajectory.stitching import CrossCameraStitcher
 from src.utils.logger import get_logger
 
@@ -143,6 +143,9 @@ def write_back(directory, detected, stitch_payload, top_k):
 
     graph = build_global_graph(merge_passages(flat), top_k=top_k)
     flat = apply_graph_by_identity(flat, graph)
+    # 多机位场景下身份键覆盖率高得多（有 global_vehicle_id 兜底），
+    # 频次通常可用；仍按同一套可用性逻辑决定是否剔除 T。
+    flat, freq_summary = apply_passage_counts(flat)
     flat = TimeFrequencyScorer().score(flat)
     flat = RiskFusion().fuse(flat)
     flat = EvidenceBuilder().build_many(flat)

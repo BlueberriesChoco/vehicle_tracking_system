@@ -114,7 +114,7 @@ button:hover { background: rgba(255,255,255,.22); }
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.ok { background: #ecfdf5; color: var(--ok); }
 
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; margin-bottom: 10px; }
 .kpi {
   background: #f8fafc;
   border: 1px solid var(--line);
@@ -244,6 +244,39 @@ td.evidence { color: var(--muted); font-size: 12px; max-width: 260px; }
 }
 .score-parts-title { font-size: 12.5px; color: #334155; font-variant-numeric: tabular-nums; }
 .score-caveat { font-size: 11.5px; color: var(--warn); margin-top: 5px; line-height: 1.55; }
+/* 封顶提示：用警示色而不是说明色，因为"75 分其实是压过的 95 分"会改变判断 */
+.score-capped {
+  font-size: 11.5px;
+  color: var(--danger);
+  background: #fef2f2;
+  border-left: 3px solid var(--danger);
+  padding: 5px 8px;
+  margin-top: 6px;
+  border-radius: 3px;
+  line-height: 1.55;
+}
+.score-weights {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .kpi-hint { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.kpi.kpi-muted .value { color: var(--muted); }
+/* 列表里的封顶标记：小、但必须在扫视时看得见 */
+.score-capped-cell { white-space: nowrap; }
+.capped-flag {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--danger);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 3px;
+  vertical-align: middle;
+}
 
 details { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
 details > summary {
