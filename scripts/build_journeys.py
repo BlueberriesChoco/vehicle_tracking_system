@@ -210,3 +210,117 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def assign_pairs(
+    rows_a: List[dict],
+    rows_b: List[dict],
+    *,
+    min_travel_sec: float = MIN_TRAVEL_SEC,
+    max_travel_sec: float = MAX_TRAVEL_SEC,
+    min_similarity: float = 0.5,
+) -> Dict[str, dict]:
+    """在两路机位之间做一对一分配，返回 ``{a_passage_id: {to, similarity, gap}}``。"""
+    if not rows_a or not rows_b:
+        return {}
+    emb_a = [parse_embedding(r.get("reid_embedding", "")) for r in rows_a]
+    emb_b = [parse_embedding(r.get("reid_embedding", "")) for r in rows_b]
+    cost = np.full((len(rows_a), len(rows_b)), INVALID_COST, dtype=np.float64)
+    sims = np.zeros_like(cost)
+    for i, row_a in enumerate(rows_a):
+        for j, row_b in enumerate(rows_b):
+            gap = travel_seconds(row_a, row_b)
+            if gap is None or not (min_travel_sec <= gap <= max_travel_sec):
+                continue
+            similarity = cosine(emb_a[i], emb_b[j])
+            if similarity is None or similarity < min_similarity:
+                continue
+            cost[i, j] = 1.0 - similarity + abs(gap - 180.0) / 3600.0 * 0.05
+            sims[i, j] = similarity
+
+    from scipy.optimize import linear_sum_assignment
+
+    result: Dict[str, dict] = {}
+    for i, j in zip(*linear_sum_assignment(cost)):
+        if cost[i, j] >= INVALID_COST:
+            continue
+        result[str(rows_a[i].get("passage_id", ""))] = {
+            "to": str(rows_b[j].get("passage_id", "")),
+            "similarity": float(sims[i, j]),
+            "gap": float(travel_seconds(rows_a[i], rows_b[j]) or 0.0),
+        }
+    return result
+
+
+def build_chain_journeys(
+    rows_by_camera: Dict[str, List[dict]],
+    edges: List[tuple],
+    *,
+    min_travel_sec: float = MIN_TRAVEL_SEC,
+    max_travel_sec: float = MAX_TRAVEL_SEC,
+    min_similarity: float = 0.5,
+) -> List[dict]:
+    """按拓扑边把多路机位串成连续行程（支持 A→B→C 这类多跳）。
+
+    每个 passage 最多一个后继、一个前驱（由一对一分配保证），
+    从没有前驱的 passage 出发沿边走下去，得到完整链路。
+    """
+    by_id: Dict[str, dict] = {}
+    for camera, rows in rows_by_camera.items():
+        for row in rows:
+            by_id[f"{camera}:{row.get('passage_id', '')}"] = row
+
+    successors: Dict[str, dict] = {}
+    has_predecessor = set()
+    for camera_a, camera_b in edges:
+        pairs = assign_pairs(
+            rows_by_camera.get(camera_a, []),
+            rows_by_camera.get(camera_b, []),
+            min_travel_sec=min_travel_sec,
+            max_travel_sec=max_travel_sec,
+            min_similarity=min_similarity,
+        )
+        for passage_a, match in pairs.items():
+            key_a = f"{camera_a}:{passage_a}"
+            key_b = f"{camera_b}:{match['to']}"
+            successors[key_a] = {"key": key_b, "similarity": match["similarity"], "gap": match["gap"]}
+            has_predecessor.add(key_b)
+
+    starts = [key for key in by_id if key not in has_predecessor]
+    journeys: List[dict] = []
+    for start in starts:
+        chain = [start]
+        similarities: List[float] = []
+        total_gap = 0.0
+        cursor = start
+        while cursor in successors:
+            step = successors[cursor]
+            chain.append(step["key"])
+            similarities.append(step["similarity"])
+            total_gap += step["gap"]
+            cursor = step["key"]
+            if len(chain) > 12:  # 防御环
+                break
+        if len(chain) < 2:
+            continue
+        legs = []
+        for key in chain:
+            camera, _, passage_id = key.partition(":")
+            row = by_id[key]
+            legs.append({
+                "camera": camera,
+                "passage_id": passage_id,
+                "enter_time": row.get("enter_time", ""),
+                "exit_time": row.get("exit_time", ""),
+            })
+        journeys.append({
+            "travel_sec": round(total_gap, 1),
+            "similarity": round(sum(similarities) / len(similarities), 4) if similarities else 0.0,
+            "min_similarity": round(min(similarities), 4) if similarities else 0.0,
+            "legs": legs,
+        })
+
+    journeys.sort(key=lambda item: (item["legs"][0]["enter_time"], len(item["legs"])), reverse=True)
+    for index, journey in enumerate(journeys, start=1):
+        journey["global_id"] = f"G{index:04d}"
+    return journeys
