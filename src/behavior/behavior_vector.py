@@ -153,7 +153,9 @@ class BehaviorVectorizer:
         plate_confidence = 0.0
 
         # ▸▸▸ Phase 2: 车辆属性特征提取 ◂◂◂
-        ocr_crop = None  # 用于车牌 OCR 的裁剪图
+        plate_votes = 0
+        reid_backend = ""
+        reid_samples = 0
 
         if tracklet.best_crop is not None:
             # 颜色识别（用最高置信度裁剪）
@@ -170,29 +172,21 @@ class BehaviorVectorizer:
                     )
                 vehicle_group = VehicleClassifier.group_vehicle_type(vehicle_type)
 
-            # ReID 特征提取
-            if self.reid_extractor is not None and self.reid_extractor.enabled:
-                reid_emb = self.reid_extractor.extract(tracklet.best_crop)
-                tracklet.reid_embedding = reid_emb
-
-        # 确定 OCR 输入：优先用最大裁剪（车最近时），只有车牌像素足够时才值得 OCR
-        if tracklet.largest_crop is not None:
-            lw = tracklet.largest_crop.shape[1]
-            if lw >= 250:  # 车辆宽度 >= 250px 时车牌约 80+ px，足够 OCR
-                ocr_crop = tracklet.largest_crop
-        if ocr_crop is None and tracklet.best_crop is not None:
-            ocr_crop = tracklet.best_crop
-
-        # 车牌检测 + OCR
-        if ocr_crop is not None and self.plate_detector is not None:
-            plate_result = self.plate_detector.detect(ocr_crop)
-            if plate_result is not None:
-                plate_img, _ = plate_result
-                if self.plate_ocr is not None and plate_img.size > 0:
-                    plate_number, plate_confidence = self.plate_ocr.recognize(plate_img)
-                    plate_hash = self.plate_ocr.hash_plate(plate_number)
-                    tracklet.plate_number = plate_number
-                    tracklet.plate_hash = plate_hash
+        crops = [crop for _, crop in sorted(
+            tracklet.identity_crops.values(), key=lambda sample: sample[0], reverse=True
+        )]
+        if not crops and not tracklet.bboxes:
+            fallback = tracklet.largest_crop if tracklet.largest_crop is not None else tracklet.best_crop
+            if fallback is not None:
+                crops = [fallback]
+        if crops and self.reid_extractor is not None and self.reid_extractor.enabled:
+            tracklet.reid_embedding, reid_samples = self.reid_extractor.extract_track(crops)
+            reid_backend = self.reid_extractor.active_backend
+        if crops and self.plate_detector is not None and self.plate_ocr is not None and self.plate_ocr.enabled:
+            plate_number, plate_confidence, plate_votes = self.plate_ocr.recognize_track(crops, self.plate_detector)
+            plate_hash = self.plate_ocr.hash_plate(plate_number)
+            tracklet.plate_number = plate_number
+            tracklet.plate_hash = plate_hash
 
         # OCR 完成后再登记频次：有车牌用 plate_hash，没有车牌才退回 track_id。
         vehicle_key = tracklet.plate_hash or str(tracklet.track_id)
@@ -213,6 +207,7 @@ class BehaviorVectorizer:
             "plate_number": plate_number,
             "plate_hash": plate_hash,
             "plate_confidence": plate_confidence,
+            "plate_votes": plate_votes,
             "geometry_level": self.scene.geometry_level,
             "speed_reliable": self.scene.speed_reliable,
             "path_reliable": self.scene.path_reliable,
@@ -257,6 +252,8 @@ class BehaviorVectorizer:
 
             # ReID embedding（序列化时单独处理）
             "reid_embedding": tracklet.reid_embedding.tolist() if tracklet.reid_embedding is not None else [],
+            "reid_backend": reid_backend,
+            "reid_samples": reid_samples,
 
             # 异常检测占位
             "anomaly_score": 0.0,

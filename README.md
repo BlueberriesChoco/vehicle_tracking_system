@@ -1061,6 +1061,23 @@ python -m compileall -q src scripts tests
 - 视频文件名时间解析
 - 几何可靠性等级
 
+## 车牌识别与跨机位关联
+
+默认配置优先使用 [HyperLPR3](https://github.com/szad670401/HyperLPR) 识别中国车牌。首次部署安装可选依赖并获取本地权重，后续推理可离线运行。
+
+```powershell
+python -m pip install hyperlpr3==0.1.3 onnxruntime
+python scripts/setup_plate_models.py
+```
+
+单视频入口会输出车牌、置信度、同轨迹支持帧数 `plate_votes`、ReID 后端和融合样本数。跨机位关联需要两路录像的录制时间、对应的机位配置，以及本地的 `models/vehicle_reid.onnx` 供车牌缺失时使用。已标定机位可设置 `reference_resolution: [1920, 1080]`，用于兼容同宽高比的低分辨率录像。
+
+```powershell
+python scripts/run_multi_camera.py --cameras "admin_in=data/outputs/vectors/admin_in,admin_out=data/outputs/vectors/admin_out" --topology config/site --output data/outputs/multi_camera.json --no-detect
+```
+
+匹配输出中的 `match_method` 为 `plate` 或 `reid`。默认 ReID 分数阈值为 `0.78`，候选分差为 `0.035`。对车牌无法确认、外观相近或时间未知的轨迹，系统保留单机位结果。跨机位准确率需用现场标注的同车和异车样本评估。
+
 ## 变更日志
 
 每次代码、配置或处理逻辑变更，都需要同步更新：

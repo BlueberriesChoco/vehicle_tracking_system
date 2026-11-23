@@ -19,12 +19,14 @@ class ByteTrackTracker:
         frame_rate: int = 25,
         min_hits: int = 3,
         camera_id: str = "cam01",
+        high_conf_threshold: float = 0.5,
     ):
         self.track_buffer = track_buffer
         self.match_thresh = match_thresh
         self.frame_rate = frame_rate
         self.min_hits = min_hits
         self.camera_id = camera_id
+        self.high_conf_threshold = high_conf_threshold
 
         # 轨迹存储：track_id -> Tracklet
         self.tracklets: Dict[int, Tracklet] = {}
@@ -108,10 +110,10 @@ class ByteTrackTracker:
         return self.tracklets
 
     def _split_by_confidence(self, detections: List[dict]) -> Tuple[List[dict], List[dict]]:
-        """将检测分为高分(>=0.5)和低分两组。"""
+        """将检测分为高分和低分两组。"""
         high, low = [], []
         for i, det in enumerate(detections):
-            if det["confidence"] >= 0.5:
+            if det["confidence"] >= self.high_conf_threshold:
                 high.append((i, det))
             else:
                 low.append((i, det))

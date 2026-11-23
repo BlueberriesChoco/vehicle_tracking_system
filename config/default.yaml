@@ -12,12 +12,13 @@ pipeline:
 detection:
   model_path: "models/yolov8s.pt"
   img_size: 640
-  conf_threshold: 0.35
+  conf_threshold: 0.20         # 低分检测用于维持既有轨迹
   iou_threshold: 0.45
   classes: [2, 3, 5, 7]      # COCO: car=2, motorcycle=3, bus=5, truck=7
   half: true                   # FP16 推理
 
 tracking:
+  high_conf_threshold: 0.50    # 新建轨迹仍需要高置信度检测
   track_buffer: 30             # 丢失后保留帧数
   match_thresh: 0.3            # IoU 匹配阈值
   frame_rate: 25               # 视频帧率（用于时间计算）

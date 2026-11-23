@@ -22,7 +22,7 @@ def load_vector_rows(input_path: str, pattern: str = "vec_*.csv") -> list:
 
     rows = []
     for file_path in files:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 row["_source_file"] = file_path
                 rows.append(row)

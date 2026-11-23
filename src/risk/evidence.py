@@ -121,7 +121,9 @@ class EvidenceBuilder:
         partners = record.get("cross_camera_partners") or []
         if partners:
             names = "、".join(
-                f"{item.get('camera')}:{item.get('track')}（相似度 {float(item.get('similarity', 0)):.2f}）"
+                f"{item.get('camera')}:{item.get('track')}（"
+                + ("车牌一致）" if item.get("match_method") == "plate"
+                   else f"外观相似度 {float(item.get('similarity', 0)):.2f}）")
                 for item in partners
             )
             items.append(

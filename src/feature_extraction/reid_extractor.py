@@ -207,6 +207,22 @@ class ReIDExtractor:
         except Exception:
             return np.zeros(self.embedding_dim, dtype=np.float32)
 
+    def extract_track(self, crops: List[np.ndarray]) -> tuple[np.ndarray, int]:
+        """Fuse a bounded set of distinct observations into one embedding."""
+        vectors = []
+        limit = 3 if self.active_backend == "onnx" else 1
+        for crop in crops[:limit]:
+            vector = self.extract(crop)
+            if np.all(np.isfinite(vector)) and np.linalg.norm(vector) > 0:
+                vectors.append(vector)
+        if not vectors:
+            return np.zeros(0, dtype=np.float32), 0
+        center = np.mean(vectors, axis=0)
+        norm = np.linalg.norm(center)
+        if norm <= 1e-8:
+            return np.zeros(0, dtype=np.float32), 0
+        return (center / norm).astype(np.float32), len(vectors)
+
     def _extract_histogram_features(self, crop: np.ndarray) -> np.ndarray:
         """无模型外观特征：HSV 直方图 + 检测框形状。"""
         resized = cv2.resize(crop, (128, 256))

@@ -10,7 +10,7 @@ class VectorWriter:
     CSV_COLUMNS = [
         "track_id", "passage_id", "global_vehicle_id", "segment_count",
         "camera_id", "vehicle_type", "vehicle_group", "analysis_target", "vehicle_color",
-        "plate_number", "plate_hash", "plate_confidence",
+        "plate_number", "plate_hash", "plate_confidence", "plate_votes",
         "geometry_level", "speed_reliable", "path_reliable",
         "aggregation_reliable", "passage_reliable",
         "enter_time", "exit_time", "duration_sec", "trajectory_length_m",
@@ -21,7 +21,7 @@ class VectorWriter:
         "freq_index", "freq_count_24h",
         "aggregation_index", "nearest_vehicle_m", "max_concurrent_vehicles",
         "trajectory_points",
-        "reid_embedding",
+        "reid_embedding", "reid_backend", "reid_samples",
         "anomaly_score", "is_anomaly", "alert_reason",
         "iforest_score", "iforest_anomaly", "traj_residual", "traj_anomaly",
         "iforest_available", "trajectory_available",

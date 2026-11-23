@@ -1,163 +1,99 @@
 #!/usr/bin/env python
-"""跨机位行程构建：把两路机位的通行记录按「ReID 相似度 + 时序约束」配成一对一行程。
-
-为什么不用纯相似度匹配：
-    `CrossCameraStitcher` 只按 ReID 余弦阈值连边，同一辆车可能同时连上多辆，
-    实测 44 条出场记录里出现 3 对穿行时间 <20 秒（低于拓扑下限 20 秒），
-    说明存在错配。这里改成全局最优的一对一分配（匈牙利算法），
-    并把拓扑允许的时间窗做成硬约束。
-
-输出 ``journeys.json``：
-    [
-      {
-        "global_id": "G0001",
-        "travel_sec": 132.0,
-        "similarity": 0.96,
-        "legs": [{"camera": "admin_in", "passage_id": "...", "enter_time": "...", "exit_time": "..."},
-                 {"camera": "admin_out", ...}]
-      }, ...
-    ]
-
-用法：
-    python scripts/build_journeys.py \
-        --in-a data/outputs/mc_admin_in/vectors/admin_in/20260901 \
-        --in-b data/outputs/mc_admin_out2/vectors/admin_out/20260901 \
-        --output data/outputs/journeys.json
-"""
+"""构建跨机位车辆行程，输出控制台可读取的 journeys.json。"""
 
 from __future__ import annotations
 
 import argparse
-import csv
-import glob
 import json
-import math
 import os
 import sys
-from datetime import datetime
-from typing import Dict, List, Optional
-
-import numpy as np
+from typing import Dict, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.logger import get_logger  # noqa: E402
+
+from src.trajectory.stitching import CrossCameraStitcher
+from src.utils.vectors_io import load_vector_rows as load_rows
 
 logger = get_logger(__name__)
 
 # 拓扑允许的穿行时间窗（秒）。config/site/topology.yaml 里 admin_in->admin_out 为 20s~3h。
 MIN_TRAVEL_SEC = 20.0
 MAX_TRAVEL_SEC = 3 * 3600.0
-INVALID_COST = 1e6
+
+def build_journeys(rows_a, rows_b, **options) -> List[dict]:
+    return sorted(
+        build_chain_journeys({"a": rows_a, "b": rows_b}, [("a", "b")], **options),
+        key=lambda journey: journey["legs"][0]["enter_time"],
+    )
 
 
-def load_rows(directory: str) -> List[dict]:
-    pattern = os.path.join(directory, "**", "*.csv")
-    files = sorted(glob.glob(pattern, recursive=True))
-    rows: List[dict] = []
-    for path in files:
-        with open(path, encoding="utf-8-sig") as handle:
-            rows.extend(csv.DictReader(handle))
-    return rows
+def assign_pairs(
+    rows_a, rows_b, *, min_travel_sec=MIN_TRAVEL_SEC,
+    max_travel_sec=MAX_TRAVEL_SEC, min_similarity=0.5,
+) -> Dict[str, dict]:
+    stitcher = CrossCameraStitcher(
+        similarity_threshold=min_similarity, default_min_travel_sec=min_travel_sec,
+        default_max_travel_sec=max_travel_sec,
+    )
+    return {
+        match["from_key"]: {
+            "to": match["to_key"], "similarity": match["similarity"],
+            "gap": match["travel_sec"], "match_method": match["match_method"],
+        }
+        for match in stitcher.match(rows_a, rows_b, "a", "b")
+    }
 
 
-def parse_embedding(value: str) -> Optional[np.ndarray]:
-    """解析 CSV 里的 ReID 向量。序列化格式是 ``[0.1, -0.2, ...]``（带逗号）。"""
-    if not value:
-        return None
-    text = value.strip()
-    try:
-        vector = np.asarray(json.loads(text), dtype=np.float64)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        cleaned = text.strip("[]").replace(",", " ")
-        vector = np.fromstring(cleaned, sep=" ", dtype=np.float64)
-    if vector.size == 0:
-        return None
-    norm = np.linalg.norm(vector)
-    return vector / norm if norm > 0 else None
-
-
-def cosine(a: Optional[np.ndarray], b: Optional[np.ndarray]) -> Optional[float]:
-    if a is None or b is None or a.shape != b.shape:
-        return None
-    return float(np.dot(a, b))
-
-
-def travel_seconds(row_a: dict, row_b: dict) -> Optional[float]:
-    try:
-        exit_a = datetime.fromisoformat(row_a["exit_time"])
-        enter_b = datetime.fromisoformat(row_b["enter_time"])
-    except (KeyError, ValueError):
-        return None
-    return (enter_b - exit_a).total_seconds()
-
-
-def build_journeys(
-    rows_a: List[dict],
-    rows_b: List[dict],
-    *,
-    min_travel_sec: float = MIN_TRAVEL_SEC,
-    max_travel_sec: float = MAX_TRAVEL_SEC,
-    min_similarity: float = 0.5,
+def build_chain_journeys(
+    rows_by_camera: Dict[str, List[dict]], edges: List[tuple], *,
+    min_travel_sec: float = MIN_TRAVEL_SEC, max_travel_sec: float = MAX_TRAVEL_SEC,
+    min_similarity: float = 0.5, ambiguity_margin: float = 0.0,
 ) -> List[dict]:
-    """一对一行程分配。返回按进入时间排序的行程列表。"""
-    if not rows_a or not rows_b:
-        return []
-
-    emb_a = [parse_embedding(r.get("reid_embedding", "")) for r in rows_a]
-    emb_b = [parse_embedding(r.get("reid_embedding", "")) for r in rows_b]
-
-    n, m = len(rows_a), len(rows_b)
-    cost = np.full((n, m), INVALID_COST, dtype=np.float64)
-    sims = np.zeros((n, m), dtype=np.float64)
-
-    for i, row_a in enumerate(rows_a):
-        for j, row_b in enumerate(rows_b):
-            gap = travel_seconds(row_a, row_b)
-            if gap is None or not (min_travel_sec <= gap <= max_travel_sec):
-                continue
-            similarity = cosine(emb_a[i], emb_b[j])
-            if similarity is None or similarity < min_similarity:
-                continue
-            # 相似度越高、穿行时间越接近中位越优；时间惩罚只做轻微区分
-            time_penalty = abs(gap - 180.0) / 3600.0 * 0.05
-            cost[i, j] = 1.0 - similarity + time_penalty
-            sims[i, j] = similarity
-
-    try:
-        from scipy.optimize import linear_sum_assignment
-    except ImportError:  # pragma: no cover - scipy 是必需依赖
-        logger.error("缺少 scipy，无法做一对一分配")
-        return []
-
-    rows_idx, cols_idx = linear_sum_assignment(cost)
-    journeys: List[dict] = []
-    for i, j in zip(rows_idx, cols_idx):
-        if cost[i, j] >= INVALID_COST:
-            continue
-        row_a, row_b = rows_a[i], rows_b[j]
-        journeys.append(
-            {
-                "travel_sec": round(travel_seconds(row_a, row_b) or 0.0, 1),
-                "similarity": round(float(sims[i, j]), 4),
-                "legs": [
-                    {
-                        "camera": row_a.get("camera_id", ""),
-                        "passage_id": row_a.get("passage_id", ""),
-                        "enter_time": row_a.get("enter_time", ""),
-                        "exit_time": row_a.get("exit_time", ""),
-                    },
-                    {
-                        "camera": row_b.get("camera_id", ""),
-                        "passage_id": row_b.get("passage_id", ""),
-                        "enter_time": row_b.get("enter_time", ""),
-                        "exit_time": row_b.get("exit_time", ""),
-                    },
-                ],
-            }
-        )
-
-    journeys.sort(key=lambda item: item["legs"][0]["enter_time"])
+    stitcher = CrossCameraStitcher(
+        similarity_threshold=min_similarity, default_min_travel_sec=min_travel_sec,
+        default_max_travel_sec=max_travel_sec, ambiguity_margin=ambiguity_margin,
+    )
+    by_id = {
+        stitcher.passage_key(camera, row): (camera, row)
+        for camera, rows in rows_by_camera.items() for row in rows
+    }
+    matches = stitcher.select_chain_matches(rows_by_camera, [
+        match for a, b in edges
+        for match in stitcher.match(rows_by_camera.get(a, []), rows_by_camera.get(b, []), a, b)
+    ])
+    successors = {match["from_key"]: match for match in matches}
+    predecessors = {match["to_key"] for match in matches}
+    journeys = []
+    for start in successors.keys() - predecessors:
+        keys = [start]
+        steps = []
+        while keys[-1] in successors:
+            step = successors[keys[-1]]
+            keys.append(step["to_key"])
+            steps.append(step)
+        legs = []
+        for key in keys:
+            camera, row = by_id[key]
+            legs.append({
+                "camera": row.get("camera_id") or camera,
+                "passage_id": row.get("passage_id") or key,
+                "enter_time": row.get("enter_time", ""),
+                "exit_time": row.get("exit_time", ""),
+            })
+        similarities = [step["similarity"] for step in steps if step["match_method"] == "reid"]
+        journeys.append({
+            "travel_sec": round(sum(step["travel_sec"] for step in steps), 1),
+            "similarity": round(sum(similarities) / len(similarities), 4) if similarities else 0.0,
+            "min_similarity": min(similarities, default=0.0),
+            "match_methods": [step["match_method"] for step in steps],
+            "legs": legs,
+        })
+    journeys.sort(
+        key=lambda journey: (journey["legs"][0]["enter_time"], journey["legs"][0]["passage_id"]),
+        reverse=True,
+    )
     for index, journey in enumerate(journeys, start=1):
         journey["global_id"] = f"G{index:04d}"
     return journeys
@@ -168,7 +104,8 @@ def main() -> None:
     parser.add_argument("--in-a", required=True, help="上游机位向量目录")
     parser.add_argument("--in-b", required=True, help="下游机位向量目录")
     parser.add_argument("--output", required=True, help="输出 journeys.json")
-    parser.add_argument("--min-similarity", type=float, default=0.5)
+    parser.add_argument("--min-similarity", type=float, default=0.78)
+    parser.add_argument("--ambiguity-margin", type=float, default=0.035)
     parser.add_argument("--min-travel-sec", type=float, default=MIN_TRAVEL_SEC)
     parser.add_argument("--max-travel-sec", type=float, default=MAX_TRAVEL_SEC)
     args = parser.parse_args()
@@ -179,7 +116,7 @@ def main() -> None:
         rows_a, rows_b,
         min_travel_sec=args.min_travel_sec,
         max_travel_sec=args.max_travel_sec,
-        min_similarity=args.min_similarity,
+        min_similarity=args.min_similarity, ambiguity_margin=args.ambiguity_margin,
     )
 
     payload = {
@@ -187,6 +124,7 @@ def main() -> None:
         "journey_count": len(journeys),
         "params": {
             "min_similarity": args.min_similarity,
+            "ambiguity_margin": args.ambiguity_margin,
             "min_travel_sec": args.min_travel_sec,
             "max_travel_sec": args.max_travel_sec,
         },
@@ -210,117 +148,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-def assign_pairs(
-    rows_a: List[dict],
-    rows_b: List[dict],
-    *,
-    min_travel_sec: float = MIN_TRAVEL_SEC,
-    max_travel_sec: float = MAX_TRAVEL_SEC,
-    min_similarity: float = 0.5,
-) -> Dict[str, dict]:
-    """在两路机位之间做一对一分配，返回 ``{a_passage_id: {to, similarity, gap}}``。"""
-    if not rows_a or not rows_b:
-        return {}
-    emb_a = [parse_embedding(r.get("reid_embedding", "")) for r in rows_a]
-    emb_b = [parse_embedding(r.get("reid_embedding", "")) for r in rows_b]
-    cost = np.full((len(rows_a), len(rows_b)), INVALID_COST, dtype=np.float64)
-    sims = np.zeros_like(cost)
-    for i, row_a in enumerate(rows_a):
-        for j, row_b in enumerate(rows_b):
-            gap = travel_seconds(row_a, row_b)
-            if gap is None or not (min_travel_sec <= gap <= max_travel_sec):
-                continue
-            similarity = cosine(emb_a[i], emb_b[j])
-            if similarity is None or similarity < min_similarity:
-                continue
-            cost[i, j] = 1.0 - similarity + abs(gap - 180.0) / 3600.0 * 0.05
-            sims[i, j] = similarity
-
-    from scipy.optimize import linear_sum_assignment
-
-    result: Dict[str, dict] = {}
-    for i, j in zip(*linear_sum_assignment(cost)):
-        if cost[i, j] >= INVALID_COST:
-            continue
-        result[str(rows_a[i].get("passage_id", ""))] = {
-            "to": str(rows_b[j].get("passage_id", "")),
-            "similarity": float(sims[i, j]),
-            "gap": float(travel_seconds(rows_a[i], rows_b[j]) or 0.0),
-        }
-    return result
-
-
-def build_chain_journeys(
-    rows_by_camera: Dict[str, List[dict]],
-    edges: List[tuple],
-    *,
-    min_travel_sec: float = MIN_TRAVEL_SEC,
-    max_travel_sec: float = MAX_TRAVEL_SEC,
-    min_similarity: float = 0.5,
-) -> List[dict]:
-    """按拓扑边把多路机位串成连续行程（支持 A→B→C 这类多跳）。
-
-    每个 passage 最多一个后继、一个前驱（由一对一分配保证），
-    从没有前驱的 passage 出发沿边走下去，得到完整链路。
-    """
-    by_id: Dict[str, dict] = {}
-    for camera, rows in rows_by_camera.items():
-        for row in rows:
-            by_id[f"{camera}:{row.get('passage_id', '')}"] = row
-
-    successors: Dict[str, dict] = {}
-    has_predecessor = set()
-    for camera_a, camera_b in edges:
-        pairs = assign_pairs(
-            rows_by_camera.get(camera_a, []),
-            rows_by_camera.get(camera_b, []),
-            min_travel_sec=min_travel_sec,
-            max_travel_sec=max_travel_sec,
-            min_similarity=min_similarity,
-        )
-        for passage_a, match in pairs.items():
-            key_a = f"{camera_a}:{passage_a}"
-            key_b = f"{camera_b}:{match['to']}"
-            successors[key_a] = {"key": key_b, "similarity": match["similarity"], "gap": match["gap"]}
-            has_predecessor.add(key_b)
-
-    starts = [key for key in by_id if key not in has_predecessor]
-    journeys: List[dict] = []
-    for start in starts:
-        chain = [start]
-        similarities: List[float] = []
-        total_gap = 0.0
-        cursor = start
-        while cursor in successors:
-            step = successors[cursor]
-            chain.append(step["key"])
-            similarities.append(step["similarity"])
-            total_gap += step["gap"]
-            cursor = step["key"]
-            if len(chain) > 12:  # 防御环
-                break
-        if len(chain) < 2:
-            continue
-        legs = []
-        for key in chain:
-            camera, _, passage_id = key.partition(":")
-            row = by_id[key]
-            legs.append({
-                "camera": camera,
-                "passage_id": passage_id,
-                "enter_time": row.get("enter_time", ""),
-                "exit_time": row.get("exit_time", ""),
-            })
-        journeys.append({
-            "travel_sec": round(total_gap, 1),
-            "similarity": round(sum(similarities) / len(similarities), 4) if similarities else 0.0,
-            "min_similarity": round(min(similarities), 4) if similarities else 0.0,
-            "legs": legs,
-        })
-
-    journeys.sort(key=lambda item: (item["legs"][0]["enter_time"], len(item["legs"])), reverse=True)
-    for index, journey in enumerate(journeys, start=1):
-        journey["global_id"] = f"G{index:04d}"
-    return journeys

@@ -24,6 +24,7 @@ IMPORT_TO_PACKAGE = {
 
 # 有 try/except 回退的可选后端，不要求出现在 requirements.txt
 OPTIONAL_MODULES = {
+    "hyperlpr3",
     "easyocr",
     "paddleocr",
     "onnxruntime",

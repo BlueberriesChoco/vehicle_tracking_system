@@ -38,7 +38,7 @@ class TrajectoryExtractor:
         优先使用标定的进出线判定穿越；
         若进出线未配置（退化线段），则自动判定：
           - enter: 轨迹点数达到 enter_min_frames 视为进入
-          - exit:  轨迹变为非活跃（lost/finished）视为离开
+          - exit:  轨迹超过丢失缓冲期（finished）视为离开
 
         Returns:
             当前帧刚完成 exit 的轨迹列表
@@ -71,11 +71,11 @@ class TrajectoryExtractor:
                     p_curr = tracklet.centers[-1]
                     if self.scene.check_line_crossing(p_prev, p_curr, "exit"):
                         exited = True
-                elif not tracklet.is_active:
+                elif tracklet.state == "finished":
                     exited = True
 
                 if exited:
-                    tracklet.mark_exited(frame_idx)
+                    tracklet.mark_exited(tracklet.last_seen_frame)
                     newly_exited.append(tracklet)
                     if tid in self._entered_tracks:
                         del self._entered_tracks[tid]

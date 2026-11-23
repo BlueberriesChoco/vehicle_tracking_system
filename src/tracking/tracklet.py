@@ -48,6 +48,7 @@ class Tracklet:
     plate_number: str = ""                # 车牌号
     plate_hash: str = ""                  # 车牌哈希
     reid_embedding: object = None         # ReID 特征向量 (np.ndarray)
+    identity_crops: dict = field(default_factory=dict, repr=False)
 
     def add_detection(
         self,

@@ -41,6 +41,7 @@ from src.pipeline.global_identity import (
     merge_risk_records,
 )
 from src.risk import EvidenceBuilder, RiskFusion, TimeFrequencyScorer, apply_passage_counts
+from src.site.topology import SiteTopology
 from src.trajectory.stitching import CrossCameraStitcher
 from src.utils.logger import get_logger
 
@@ -203,7 +204,9 @@ def main():
     parser.add_argument("--cameras", required=True, help='e.g. "camA=dirA,camB=dirB"')
     parser.add_argument("--pairs", default="", help='e.g. "camA:camB,camB:camC"')
     parser.add_argument("--output", required=True, help="Output JSON path")
-    parser.add_argument("--threshold", type=float, default=0.7, help="ReID cosine threshold")
+    parser.add_argument("--threshold", type=float, default=0.78, help="ReID score threshold")
+    parser.add_argument("--ambiguity-margin", type=float, default=0.035)
+    parser.add_argument("--topology", default="config/site", help="Site topology directory")
     parser.add_argument("--top-k", type=int, default=3, help="Graph top-k")
     parser.add_argument("--no-detect", action="store_true", help="Skip unsupervised detection")
     parser.add_argument(
@@ -214,7 +217,12 @@ def main():
     args = parser.parse_args()
 
     cameras = parse_cameras(args.cameras)
-    pairs = parse_pairs(args.pairs) if args.pairs else []
+    topology = SiteTopology(args.topology)
+    pairs = parse_pairs(args.pairs) if args.pairs else [
+        (edge["from_camera_id"], edge["to_camera_id"])
+        for edge in topology.edges
+        if edge.get("from_camera_id") in cameras and edge.get("to_camera_id") in cameras
+    ]
 
     vectors = {camera_id: load_vectors(directory) for camera_id, directory in cameras.items()}
     for camera_id, rows in vectors.items():
@@ -233,24 +241,31 @@ def main():
     graphs = {camera_id: graph_summary(rows, top_k=args.top_k) for camera_id, rows in detected.items()}
 
     stitch_results = {}
-    global_ids = {}
-    for from_camera, to_camera in pairs:
+    stitcher = CrossCameraStitcher(topology=topology, similarity_threshold=args.threshold,
+                                   ambiguity_margin=args.ambiguity_margin)
+    for from_camera, to_camera in dict.fromkeys(pairs):
         if from_camera not in vectors or to_camera not in vectors:
             logger.warning("Pair skipped (missing camera): %s -> %s", from_camera, to_camera)
             continue
-        stitcher = CrossCameraStitcher(similarity_threshold=args.threshold)
         matches = stitcher.match(vectors[from_camera], vectors[to_camera], from_camera, to_camera)
-        nodes = [stitcher.passage_key(from_camera, row) for row in vectors[from_camera]]
-        nodes += [stitcher.passage_key(to_camera, row) for row in vectors[to_camera]]
-        mapping = stitcher.assign_global_ids(nodes, matches)
         key = f"{from_camera}->{to_camera}"
+        stitch_results[key] = {"matches": matches}
+
+    accepted = stitcher.select_chain_matches(
+        vectors, [match for pair in stitch_results.values() for match in pair["matches"]]
+    )
+    nodes = list(dict.fromkeys(key for match in accepted for key in (match["from_key"], match["to_key"])))
+    mapping = stitcher.assign_global_ids(nodes, accepted)
+    by_pair = {key: [] for key in stitch_results}
+    for match in accepted:
+        by_pair[f"{match['from_camera']}->{match['to_camera']}"].append(match)
+    for key, matches in by_pair.items():
         stitch_results[key] = {
-            "match_count": len(matches),
             "matches": matches,
-            "global_vehicle_count": len(set(mapping.values())),
+            "match_count": len(matches),
+            "global_vehicle_count": len({mapping[m["from_key"]] for m in matches}),
         }
-        for node_key, gid in mapping.items():
-            global_ids[str(node_key)] = gid
+    global_ids = {key: f"G{gid + 1:04d}" for key, gid in mapping.items()}
 
     payload = {
         "cameras": {camera_id: len(rows) for camera_id, rows in vectors.items()},

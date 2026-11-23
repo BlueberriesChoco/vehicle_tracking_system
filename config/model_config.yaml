@@ -23,11 +23,9 @@ plate:
   enabled: true                   # 优先使用专用YOLO车牌模型，缺失时回退形态学检测
   detector_weights: "models/license_plate_yolov8.pt"
   detector_conf: 0.35
-  # 实测：1080p 下车牌高度约 60px，easyocr 会把 87316 读成 873061、
-  # 且英文模型读不出省份汉字。提高门槛，宁可不输出也不要错误车牌污染匹配。
-  min_plate_width: 120
-  ocr_engine: "easyocr"
-  ocr_lang: "en"
+  min_plate_width: 24             # 原始像素宽度，放大后仍需通过格式及多帧校验
+  ocr_engine: "hyperlpr3"         # 中文专用，未安装时回退 EasyOCR
+  ocr_lang: "ch_sim"
   ocr_min_conf: 0.7
 
 reid:

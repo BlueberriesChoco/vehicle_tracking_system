@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import numpy as np
+import cv2
 
 from ..detection.detector import VehicleDetector
 from ..detection.roi_filter import ROIFilter
@@ -36,6 +37,7 @@ class FramePipeline:
         self._frame_idx: int = 0
         self._start_time: Optional[datetime] = None
         self._completed_vectors: List[dict] = []
+        self.identity_crop_scale = (1.0, 1.0)
 
     def process_frame(
         self,
@@ -100,7 +102,6 @@ class FramePipeline:
 
         # Step 4: 轨迹完成判定；无进出线时使用“出现→消失”的自动完成逻辑
         all_tracklets = self.tracker.get_all_tracklets()
-        position_histories = self._get_position_histories(all_tracklets)
         newly_exited = self.trajectory_extractor.process_frame(
             {t.track_id: t for t in all_tracklets},
             self._frame_idx,
@@ -110,10 +111,19 @@ class FramePipeline:
         new_vectors = []
         active_tracklets = self.tracker.get_active_tracklets()
         all_positions = self._get_active_positions(active_tracklets)
+        position_histories = self._get_position_histories(all_tracklets) if newly_exited else {}
 
         for tracklet in newly_exited:
             vec = self.vectorizer.vectorize(tracklet, all_positions, position_histories)
             new_vectors.append(vec)
+            tracklet.identity_crops.clear()
+
+        for tracklet in all_tracklets:
+            if tracklet.state == "finished" and (
+                not tracklet.has_entered
+                or tracklet.trajectory_length < self.trajectory_extractor.min_trajectory_length
+            ):
+                tracklet.identity_crops.clear()
 
         self._completed_vectors.extend(new_vectors)
         self._frame_idx += 1
@@ -130,7 +140,7 @@ class FramePipeline:
         - largest_crop: 最大 bbox 面积（车辆最近时，用于车牌 OCR）
         """
         for tracklet in self.tracker.get_active_tracklets():
-            if not tracklet.bboxes:
+            if not tracklet.bboxes or tracklet.last_seen_frame != self._frame_idx:
                 continue
 
             x1, y1, x2, y2 = tracklet.bboxes[-1]
@@ -157,6 +167,38 @@ class FramePipeline:
                 tracklet.largest_crop = crop.copy()
                 tracklet.largest_crop_bbox = [x1_c, y1_c, x2_c, y2_c]
 
+            if not tracklet.has_exited and (
+                getattr(self.vectorizer, "plate_ocr", None) is not None
+                or getattr(self.vectorizer, "reid_extractor", None) is not None
+            ):
+                self._save_identity_crop(tracklet, crop, latest_conf, (x1_c, y1_c, x2_c, y2_c), (h, w))
+
+    def _save_identity_crop(self, tracklet, crop, confidence, box, frame_size):
+        if min(crop.shape[:2]) < 12:
+            return
+        x1, y1, x2, y2 = box
+        h, w = frame_size
+        sx, sy = self.identity_crop_scale
+        native_size = (round((x2 - x1) * sx), round((y2 - y1) * sy))
+        if min(native_size) < 12:
+            return
+        coverage = 0.5 if x1 == 0 or y1 == 0 or x2 == w or y2 == h else 1.0
+        score = native_size[0] * native_size[1] * confidence * coverage
+        bucket = self._frame_idx // max(2, round(self.frame_rate * 0.2))
+        crops = tracklet.identity_crops
+        if bucket in crops and crops[bucket][0] >= score:
+            return
+        if bucket not in crops and len(crops) >= 5:
+            weakest = min(crops, key=lambda key: crops[key][0])
+            if crops[weakest][0] >= score:
+                return
+            del crops[weakest]
+        if native_size != (crop.shape[1], crop.shape[0]):
+            crop = cv2.resize(crop, native_size, interpolation=cv2.INTER_AREA)
+        else:
+            crop = crop.copy()
+        crops[bucket] = (score, crop)
+
     def finalize(self) -> List[dict]:
         """处理结束后，对未退出但已进入的轨迹也构建向量。"""
         remaining = []
@@ -173,6 +215,7 @@ class FramePipeline:
                 if not already_done and tracklet.trajectory_length >= self.trajectory_extractor.min_trajectory_length:
                     vec = self.vectorizer.vectorize(tracklet, all_positions, position_histories)
                     remaining.append(vec)
+                    tracklet.identity_crops.clear()
 
         self._completed_vectors.extend(remaining)
         return remaining

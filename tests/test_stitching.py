@@ -167,3 +167,52 @@ def test_attribute_penalty_zero_for_consistent_attributes():
 
     assert matches[0]["attribute_penalty"] == 0.0
     assert matches[0]["score"] == matches[0]["similarity"]
+
+
+def test_plate_can_link_without_reid_and_conflicting_plate_vetoes_reid():
+    source = _passage(1, _base_time(), _base_time(), [])
+    target = _passage(11, _base_time(second=30), _base_time(second=30), [])
+    plate = "\u82cfF12345"
+    for row in (source, target):
+        row.update(plate_number=plate, plate_votes="2", plate_confidence="0.8")
+    stitcher = CrossCameraStitcher(ambiguity_margin=0.035)
+    assert stitcher.match([source], [target], "a", "b")[0]["match_method"] == "plate"
+
+    target["plate_number"] = "\u82cfF12346"
+    for row in (source, target):
+        row["reid_embedding"] = [1.0, 0.0]
+    assert stitcher.match([source], [target], "a", "b") == []
+
+
+def test_low_resolution_lookalikes_are_left_unmatched():
+    source = _passage(1, _base_time(), _base_time(), [1.0, 0.0])
+    target = _passage(11, _base_time(second=30), _base_time(second=30), [1.0, 0.0])
+    other = _passage(12, _base_time(second=31), _base_time(second=31), [0.99, 0.01])
+    stitcher = CrossCameraStitcher(ambiguity_margin=0.035)
+    assert stitcher.match([source], [target], "a", "b")[0]["match_method"] == "reid"
+    assert stitcher.match([source], [target, other], "a", "b") == []
+    source["reid_backend"] = target["reid_backend"] = "histogram"
+    assert stitcher.match([source], [target], "a", "b") == []
+    source["reid_backend"] = target["reid_backend"] = "onnx"
+    source["time_known"] = "0"
+    assert stitcher.match([source], [target], "a", "b") == []
+
+
+def test_candidate_just_below_threshold_counts_for_ambiguity():
+    source = _passage(1, _base_time(), _base_time(), [1.0, 0.0])
+    above = _passage(2, _base_time(second=30), _base_time(second=30), [0.79, np.sqrt(1 - 0.79 ** 2)])
+    below = _passage(3, _base_time(second=31), _base_time(second=31), [0.77, np.sqrt(1 - 0.77 ** 2)])
+    stitcher = CrossCameraStitcher(similarity_threshold=0.78, ambiguity_margin=0.035)
+    assert stitcher.match([source], [above, below], "a", "b") == []
+
+
+def test_chain_does_not_merge_conflicting_plates_via_unreadable_middle():
+    a = _passage(1, _base_time(), _base_time(), [1.0, 0.0])
+    b = _passage(2, _base_time(second=30), _base_time(second=31), [1.0, 0.0])
+    c = _passage(3, _base_time(minute=1), _base_time(minute=1), [1.0, 0.0])
+    a.update(plate_number="\u82cfF12345", plate_confidence=0.9, plate_votes=2)
+    c.update(plate_number="\u82cfF12346", plate_confidence=0.9, plate_votes=2)
+    stitcher = CrossCameraStitcher()
+    matches = stitcher.match([a], [b], "a", "b") + stitcher.match([b], [c], "b", "c")
+    assert len(matches) == 2
+    assert len(stitcher.select_chain_matches({"a": [a], "b": [b], "c": [c]}, matches)) == 1

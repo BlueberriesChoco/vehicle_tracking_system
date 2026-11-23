@@ -78,7 +78,8 @@ class PlateDetector:
         _, binary = cv2.threshold(sobel_x, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY)
 
         # 形态学闭运算 — 连接字符区域
-        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 5))
+        kernel_width = max(7, min(17, (crop.shape[1] // 18) | 1))
+        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 3))
         closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel_h)
 
         # 找轮廓
@@ -89,7 +90,7 @@ class PlateDetector:
 
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area < self.PLATE_AREA_MIN or area > self.PLATE_AREA_MAX:
+            if area < min(self.PLATE_AREA_MIN, self.min_plate_width ** 2 / 6) or area > self.PLATE_AREA_MAX:
                 continue
 
             # 最小外接矩形
@@ -99,7 +100,7 @@ class PlateDetector:
 
             w = rect[1][0]
             h = rect[1][1]
-            if min(w, h) == 0:
+            if max(w, h) < self.min_plate_width or min(w, h) < 9:
                 continue
 
             aspect_ratio = max(w, h) / min(w, h)
@@ -135,9 +136,11 @@ class PlateDetector:
             confs = result.boxes.conf.cpu().numpy()
             for box, conf in zip(boxes, confs):
                 x1, y1, x2, y2 = box.astype(int)
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(crop.shape[1], x2), min(crop.shape[0], y2)
                 width = x2 - x1
                 height = y2 - y1
-                if width < self.min_plate_width or height <= 0:
+                if width < self.min_plate_width or height < 9:
                     continue
                 area_score = min((width * height) / 3000.0, 1.0)
                 score = float(conf) + 0.15 * area_score

@@ -23,12 +23,14 @@ pytest>=7.0.0
 psutil>=5.9.0                  # 浸泡测试的 RSS 采集（scripts/soak_test.py）
 
 # ---- Optional backends -------------------------------------------------
+#   hyperlpr3   默认中文车牌识别后端
 # 这些包都有 try/except 回退，不装也能跑完整链路，只是对应能力会退化：
 #   easyocr     车牌 OCR（缺失 -> 车牌字段为空）
 #   paddleocr   车牌 OCR 的中文备选引擎
 #   onnxruntime 车辆 ReID 的 ONNX 后端（缺失 -> 回退 HSV 直方图）
 #   torchreid   ReID 的 torchreid 后端（缺失 -> 回退 HSV 直方图）
 # 需要时取消注释：
+# hyperlpr3==0.1.3
 # easyocr>=1.7.0
 # onnxruntime>=1.16.0
 # torchreid>=0.2.1

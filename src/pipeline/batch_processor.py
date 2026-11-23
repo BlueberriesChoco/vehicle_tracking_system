@@ -80,6 +80,12 @@ class BatchProcessor:
         """初始化所有组件。"""
         cfg = self.config
         cam_cfg = self.camera_config
+        self.reference_resolution = tuple(cam_cfg.get("reference_resolution") or ())
+        if self.reference_resolution and (
+            len(self.reference_resolution) != 2
+            or any(type(value) is not int or value <= 0 for value in self.reference_resolution)
+        ):
+            raise ValueError("reference_resolution must contain two positive integers [width, height]")
 
         # 检测器
         det_cfg = cfg.get("detection", {})
@@ -115,6 +121,7 @@ class BatchProcessor:
             frame_rate=self.frame_rate,
             min_hits=track_cfg.get("min_hits", 3),
             camera_id=camera_id,
+            high_conf_threshold=track_cfg.get("high_conf_threshold", 0.5),
         )
 
         # 场景几何：决定速度、路径偏离、聚集距离等字段是否可靠
@@ -327,13 +334,25 @@ class BatchProcessor:
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(start_frame))
             self.logger.info(f"Seek to frame {start_frame}")
 
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        reference_size = self.reference_resolution
+        resize_to_reference = bool(reference_size and (width, height) != reference_size)
+        self.pipeline.identity_crop_scale = (1.0, 1.0)
+        if resize_to_reference:
+            ref_width, ref_height = reference_size
+            if width <= 0 or height <= 0 or abs(width * ref_height / (height * ref_width) - 1) > 0.02:
+                cap.release()
+                raise ValueError("Video aspect ratio differs from camera reference_resolution")
+            self.logger.info("Resizing %sx%s frames to camera reference %sx%s", width, height, ref_width, ref_height)
+            self.pipeline.identity_crop_scale = (width / ref_width, height / ref_height)
+
         # 视频写入器
         video_writer = None
         if self.output_video_enabled and output_video_path:
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            video_writer = cv2.VideoWriter(output_video_path, fourcc, self.frame_rate, (w, h))
+            output_size = reference_size if resize_to_reference else (width, height)
+            video_writer = cv2.VideoWriter(output_video_path, fourcc, self.frame_rate, output_size)
 
         # 逐帧处理
         frame_count = 0
@@ -377,6 +396,8 @@ class BatchProcessor:
                 timestamp = video_start_time + timedelta(
                     seconds=(start_frame + frame_count - 1) / source_fps
                 )
+                if resize_to_reference:
+                    frame = cv2.resize(frame, reference_size, interpolation=cv2.INTER_LINEAR)
                 batch_frames.append(frame)
                 batch_timestamps.append(timestamp)
                 if len(batch_frames) >= batch_size:
@@ -463,7 +484,7 @@ class BatchProcessor:
     def _init_plate_ocr(model_cfg: dict):
         plate_cfg = model_cfg.get("plate", {}) if model_cfg else {}
         if plate_cfg.get("enabled", False):
-            return PlateOCR(engine=plate_cfg.get("ocr_engine", "easyocr"), lang=plate_cfg.get("ocr_lang", "en"), min_confidence=plate_cfg.get("ocr_min_conf", 0.55))
+            return PlateOCR(engine=plate_cfg.get("ocr_engine", "easyocr"), lang=plate_cfg.get("ocr_lang", "ch_sim"), min_confidence=plate_cfg.get("ocr_min_conf", 0.55))
         return None
 
     @staticmethod

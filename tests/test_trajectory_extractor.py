@@ -74,9 +74,12 @@ def test_fallback_entry_and_exit_without_lines():
     assert tracklet.has_entered
     assert not tracklet.has_exited
 
+    tracklet.mark_lost()
+    assert extractor.process_frame({1: tracklet}, 5) == []
     tracklet.mark_finished()
-    exited.extend(extractor.process_frame({1: tracklet}, 5))
+    exited.extend(extractor.process_frame({1: tracklet}, 6))
     assert tracklet.has_exited
+    assert tracklet.exit_frame == 4
     assert len(exited) == 1
 
 

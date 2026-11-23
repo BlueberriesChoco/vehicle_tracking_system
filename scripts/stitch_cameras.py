@@ -38,7 +38,8 @@ def main():
     parser.add_argument("--from-camera", required=True)
     parser.add_argument("--to-camera", required=True)
     parser.add_argument("--topology", default="config/site", help="Site topology config dir")
-    parser.add_argument("--threshold", type=float, default=0.7, help="ReID cosine similarity threshold")
+    parser.add_argument("--threshold", type=float, default=0.78, help="ReID score threshold")
+    parser.add_argument("--ambiguity-margin", type=float, default=0.035)
     parser.add_argument("--output", required=True, help="Output JSON path")
     args = parser.parse_args()
 
@@ -49,7 +50,8 @@ def main():
         sys.exit(1)
 
     topology = SiteTopology(args.topology) if os.path.isdir(args.topology) else None
-    stitcher = CrossCameraStitcher(topology=topology, similarity_threshold=args.threshold)
+    stitcher = CrossCameraStitcher(topology=topology, similarity_threshold=args.threshold,
+                                   ambiguity_margin=args.ambiguity_margin)
     matches = stitcher.match(source, target, args.from_camera, args.to_camera)
 
     # 节点键必须与匹配对里的 from_key/to_key 同源（优先 passage_id），

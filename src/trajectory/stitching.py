@@ -2,21 +2,22 @@
 
 思路：
 1. 先用摄像头拓扑边给出的“通行时间窗口”筛选候选（A 车离开后，多久可能出现在 B）；
-2. 再用 ReID 外观相似度做一对一匹配（贪心，按相似度降序）；
+2. 使用可信车牌或 ReID 外观相似度做一对一匹配；
 3. 用并查集把匹配对合并成 `global_vehicle_id`，形成跨摄像头车辆级身份。
 
-说明：当前 ReID 使用 HSV 直方图 fallback，区分度有限；接入正式 ReID 模型后，
-同一套匹配逻辑可直接复用。
 """
 
 from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+from ..feature_extraction.plate_ocr import PlateOCR
 
 
 _COLOR_GROUPS = {
@@ -26,6 +27,7 @@ _COLOR_GROUPS = {
     "yellow": "chromatic", "orange": "chromatic", "cyan": "chromatic",
     "purple": "chromatic", "brown": "chromatic",
 }
+SITE_TIMEZONE = timezone(timedelta(hours=8))
 
 
 def _color_group(value) -> str:
@@ -36,7 +38,11 @@ def parse_time(value) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        # Older vector CSVs use local site time (UTC+8) without an offset.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=SITE_TIMEZONE)
+        return parsed.astimezone(timezone.utc)
     except (TypeError, ValueError):
         return None
 
@@ -58,12 +64,23 @@ def parse_embedding(value) -> np.ndarray:
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    if a.size == 0 or b.size == 0 or a.shape != b.shape:
+    if a.size == 0 or b.size == 0 or a.shape != b.shape or not (np.isfinite(a).all() and np.isfinite(b).all()):
         return 0.0
     norm = float(np.linalg.norm(a) * np.linalg.norm(b))
     if norm <= 1e-12:
         return 0.0
     return float(np.dot(a, b) / norm)
+
+
+def trusted_plate(row: dict) -> str:
+    try:
+        confidence = float(row.get("plate_confidence") or 0)
+        votes = int(row.get("plate_votes") or 0)
+    except (TypeError, ValueError, OverflowError):
+        return ""
+    if not np.isfinite(confidence) or confidence > 1 or confidence < (0.70 if votes >= 2 else 0.94):
+        return ""
+    return PlateOCR._clean_plate(str(row.get("plate_number") or ""))
 
 
 class CrossCameraStitcher:
@@ -76,6 +93,7 @@ class CrossCameraStitcher:
         default_min_travel_sec: float = 5.0,
         default_max_travel_sec: float = 600.0,
         attribute_penalty: float = 0.05,
+        ambiguity_margin: float = 0.0,
     ):
         self.topology = topology
         self.similarity_threshold = similarity_threshold
@@ -83,6 +101,7 @@ class CrossCameraStitcher:
         self.default_max_travel_sec = default_max_travel_sec
         # 车型/颜色不一致时对 ReID 分数做小幅惩罚（先验，不是硬过滤）
         self.attribute_penalty = attribute_penalty
+        self.ambiguity_margin = ambiguity_margin
 
     def _attribute_penalty_for(self, source: dict, target: dict) -> float:
         penalty = 0.0
@@ -137,55 +156,115 @@ class CrossCameraStitcher:
     ) -> List[dict]:
         """在 source（上游摄像头）与 target（下游摄像头）之间做一对一匹配。"""
         min_travel, max_travel = self._time_window(from_camera, to_camera)
+        if not source_passages or not target_passages or not np.isfinite([min_travel, max_travel]).all():
+            return []
 
-        candidates = []
-        for source in source_passages:
-            source_exit = parse_time(source.get("exit_time"))
+        def observations(rows, time_field):
+            return [
+                (
+                    parse_time(row.get(time_field))
+                    if str(row.get("time_known", "")).strip().lower() not in {"0", "0.0", "false"} else None,
+                    trusted_plate(row),
+                    parse_embedding(row.get("reid_embedding")),
+                    str(row.get("reid_backend") or ""),
+                )
+                for row in rows
+            ]
+
+        sources = observations(source_passages, "exit_time")
+        targets = observations(target_passages, "enter_time")
+        scores = np.full((len(sources), len(targets)), -np.inf)
+        candidates = {}
+        for i, (source_exit, source_plate, source_embedding, source_backend) in enumerate(sources):
             if source_exit is None:
                 continue
-            source_embedding = parse_embedding(source.get("reid_embedding"))
-            for target in target_passages:
-                target_enter = parse_time(target.get("enter_time"))
+            source = source_passages[i]
+            for j, (target_enter, target_plate, target_embedding, target_backend) in enumerate(targets):
                 if target_enter is None:
                     continue
                 travel = (target_enter - source_exit).total_seconds()
                 if travel < min_travel or travel > max_travel:
                     continue
-                similarity = cosine_similarity(
-                    source_embedding, parse_embedding(target.get("reid_embedding"))
+                target = target_passages[j]
+                if source_plate and target_plate and source_plate != target_plate:
+                    continue
+                comparable = (
+                    source_backend in {"", "onnx"} and target_backend in {"", "onnx"}
+                    and source_embedding.size != 74 and target_embedding.size != 74
                 )
+                similarity = cosine_similarity(source_embedding, target_embedding) if comparable else 0.0
                 penalty = self._attribute_penalty_for(source, target)
+                plate_match = bool(source_plate and source_plate == target_plate)
                 score = similarity - penalty
-                if score >= self.similarity_threshold:
-                    candidates.append((score, travel, source, target, similarity, penalty))
-
-        # 贪心一对一：综合分高优先，避免一辆车被重复匹配
-        candidates.sort(key=lambda item: -item[0])
-        used_source = set()
-        used_target = set()
-        matches = []
-        for score, travel, source, target, similarity, penalty in candidates:
-            source_key = self.passage_key(from_camera, source)
-            target_key = self.passage_key(to_camera, target)
-            if source_key in used_source or target_key in used_target:
-                continue
-            used_source.add(source_key)
-            used_target.add(target_key)
-            matches.append(
-                {
+                if not plate_match and similarity <= 0:
+                    continue
+                # A plate match ranks above any directly competing appearance match.
+                scores[i, j] = 2.0 + max(0.0, similarity) * 0.1 if plate_match else score
+                if not plate_match and score < self.similarity_threshold:
+                    continue
+                candidates[i, j] = {
                     "from_camera": from_camera,
                     "from_track": source.get("track_id"),
                     "to_camera": to_camera,
                     "to_track": target.get("track_id"),
-                    "from_key": source_key,
-                    "to_key": target_key,
+                    "from_key": self.passage_key(from_camera, source),
+                    "to_key": self.passage_key(to_camera, target),
                     "similarity": round(similarity, 4),
                     "attribute_penalty": round(penalty, 4),
-                    "score": round(score, 4),
+                    "score": 1.0 if plate_match else round(score, 4),
                     "travel_sec": round(travel, 2),
+                    "match_method": "plate" if plate_match else "reid",
                 }
-            )
+
+        if not candidates:
+            return []
+        best_rows = np.max(scores, axis=1)
+        best_cols = np.max(scores, axis=0)
+        # Dummy columns permit rows with insufficient evidence to stay unmatched.
+        costs = np.zeros((len(sources), len(targets) + len(sources)))
+        costs[:, :len(targets)] = 1e6
+        for (i, j), match in candidates.items():
+            score = scores[i, j]
+            if self.ambiguity_margin > 0:
+                other_row = max(scores[i, :j].max(initial=-np.inf), scores[i, j + 1:].max(initial=-np.inf))
+                other_col = max(scores[:i, j].max(initial=-np.inf), scores[i + 1:, j].max(initial=-np.inf))
+                if score < max(best_rows[i], best_cols[j]) or score - max(other_row, other_col) < self.ambiguity_margin:
+                    continue
+            costs[i, j] = -score
+        matches = [
+            candidates[i, j] for i, j in zip(*linear_sum_assignment(costs))
+            if j < len(targets) and costs[i, j] < 0
+        ]
         return matches
+
+    def select_chain_matches(self, rows_by_camera: Dict[str, List[dict]], matches: Sequence[dict]) -> List[dict]:
+        """Prevent forks and conflicting plates across multiple camera pairs."""
+        plates = {
+            self.passage_key(camera, row): trusted_plate(row)
+            for camera, rows in rows_by_camera.items() for row in rows
+        }
+        successor = {}
+        predecessor = {}
+        accepted = []
+        for match in sorted(matches, key=lambda row: (row["match_method"] == "plate", row["score"]), reverse=True):
+            source, target = match["from_key"], match["to_key"]
+            if source == target or source in successor or target in predecessor:
+                continue
+            head, tail = source, target
+            while head in predecessor:
+                head = predecessor[head]
+            while tail in successor:
+                tail = successor[tail]
+            if head == target or tail == source:
+                continue
+            a, b = plates.get(head), plates.get(target)
+            if a and b and a != b:
+                continue
+            plates[head] = a or b
+            successor[source] = target
+            predecessor[target] = source
+            accepted.append(match)
+        return accepted
 
     def assign_global_ids(self, nodes: Sequence, matches: Sequence[dict]) -> Dict:
         """用并查集把匹配对合并为全局车辆 ID。
