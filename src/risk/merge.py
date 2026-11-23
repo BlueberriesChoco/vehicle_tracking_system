@@ -85,12 +85,10 @@ def apply_stitch(rows: List[dict], stitch: Optional[dict]) -> List[dict]:
             b_short = f"{match['to_camera']}:{match['to_track']}"
             to_partner = {"camera": match["to_camera"], "track": match["to_track"], "similarity": match["similarity"]}
             from_partner = {"camera": match["from_camera"], "track": match["from_track"], "similarity": match["similarity"]}
+            if match.get("match_method"):
+                to_partner["match_method"] = from_partner["match_method"] = match["match_method"]
             partner_index.setdefault(a_full, []).append(to_partner)
             partner_index.setdefault(b_full, []).append(from_partner)
-            if a_short != a_full:
-                partner_index.setdefault(a_short, []).append(to_partner)
-            if b_short != b_full:
-                partner_index.setdefault(b_short, []).append(from_partner)
 
     enriched = []
     for row in rows:
@@ -102,12 +100,13 @@ def apply_stitch(rows: List[dict], stitch: Optional[dict]) -> List[dict]:
         short_key = f"{camera}:{track}"
         full_key = f"{camera}:{source}:{track}" if source else short_key
 
-        partners = (
-            (partner_index.get(passage_id) if passage_id else None)
-            or partner_index.get(full_key)
-            or partner_index.get(short_key)
-            or []
-        )
+        partners = []
+        if passage_id:
+            partners = partner_index.get(passage_id, []) or []
+        if not partners and (not passage_id or full_key in global_ids):
+            partners = partner_index.get(full_key, []) or []
+        if not partners and ((not passage_id and not source) or full_key in global_ids):
+            partners = partner_index.get(short_key, []) or []
         # 去重（同一伙伴可能同时命中 passage_id 与短键）
         seen = set()
         unique_partners = []
