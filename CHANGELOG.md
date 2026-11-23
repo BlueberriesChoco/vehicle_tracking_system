@@ -43,7 +43,186 @@
 - **融合是"图优先"**：标称 α=0.4 > β=0.35，但 A 的上界是 0.822、G 是 1.0，
   实际最大贡献 G(0.350) > A(0.329)。
 
-**工程质量**：366 个单元测试、`scripts/ci.ps1` 6 步全绿、`scripts/delivery_check.py` 5 项门禁。
+**工程质量**：381 个单元测试、`scripts/ci.ps1` 6 步全绿、`scripts/delivery_check.py` 5 项门禁。
+
+## 2026-11-23
+
+### 现场标定落地：单应矩阵 + 跟踪跳变剔除
+
+#### 一、标定数据
+
+现场在 11:35:16 帧（1920×1080）上点取控制点，两种标尺互相校验：
+
+| 标尺 | 实测 | 用途 |
+|---|---|---|
+| 人行护栏立柱边缘间距 | 3.00 m | 沿护栏方向（x） |
+| 同一立柱两边缘 | 0.10 m | 交叉校验：3 m 给出 137.5 px/m，0.1 m 给出 139.0 px/m，差 1% |
+| 减速带第 1/14/17 颗螺栓 | 0.00 / 3.14 / 3.86 m | 垂直护栏方向（y），每节 0.24 m，13/16 节 |
+| 路缘石 → 第 14/17 颗螺栓 | 3.49 / 4.33 m | 沿减速带方向：反推起点在 A 前 0.35 / 0.47 m（差 0.12 m，卷尺钩位置差异） |
+| 两根黄黑柱中心 | 3.6 m | 交叉校验**未通过**：模型推算 4.24 m（差 17.8%），按要求不参与标定 |
+
+拟合结果：倾角 22.5°，A=(-1.15, 2.75)，**RMS = 2.19 px**。
+
+自检：车道宽度在 y=600/700/800/900 四行分别为 **4.19 / 4.28 / 4.19 / 4.16 m**（差 <3%）。
+正确标定下平行车道边界必须等宽，这条自检通过才写入配置。
+
+#### 二、标定前的问题
+
+- `px_per_meter: 50.0` 是占位值。实测横向约 250 px/m、纵向约 70 px/m，
+  **单一常数无法表达各向异性**，横纵差 3.5 倍。
+- `geometry_level` 停留在 `roi`，导致 7 个几何特征被门控
+  （avg/max speed、speed_variance、path_deviation、path_smoothness、
+  aggregation_index、nearest_vehicle_m），无监督检测实际只按"通行时长 + 同屏车数"排序。
+
+#### 三、标定效果
+
+```
+geometry_level: roi → calibrated
+speed_reliable / path_reliable / aggregation_reliable: 0 → 1
+平均速度中位：30.3 km/h（旧，px/m=50）→ 16.7~17.9 km/h（新）
+```
+
+#### 四、跟踪跳变剔除
+
+标定后 `max_speed` 出现 121 km/h 的荒谬值。排查发现单帧内检测框跳变 111 px
+（换 ID / 遮挡重关联），换算 1.34 m/帧 = 121 km/h。
+
+`speed_feature.py` 新增 `_reject_spikes()`：超过中位速度 3 倍的瞬时值按中位数回填，
+并把剔除帧数记入 `speed_outlier_count` 供审计。
+
+效果：`max_speed` 从 8–121 km/h 收敛到 **29–46 km/h**。
+
+#### 五、待处理
+
+- `anomaly.max_speed_kmh: 40` 现在会命中 8/15 辆车，阈值需按实测分布重定（建议 50–55 km/h，
+  或改用 avg_speed 判据）。
+- `path_deviation` 仍全为 0：路径基准（`path_reference.build_from_trajectories`）尚未接入。
+
+```text
+pytest: 384 passed（新增 3 条跳变剔除用例）
+```
+
+### 控制台前端：四个缺陷导致界面读旧口径产物（含"无数据"被渲染成"0 分"）
+
+后端本轮新增了分量可用性、证据封顶、非监管对象分离、图谱可比性四组语义，
+前端一个都没消费到。核查 `src/web/server.py` 后发现四个独立缺陷，任一个都足以让
+一线把界面读反：
+
+#### 缺陷 1：文件选取按字母序，永远读到旧版本产物
+
+`_first()` 原本 `sorted(glob)[0]`。目录里同时存在 `graph_admin_in.json` 与
+重建后的 `graph_admin_in_v2.json` 时，`_v2` 排在后面，`[0]` 恒为旧版。
+旧版节点键是 `camera:track`，记录键是 `passage_id`，零重叠 → G 全 0、R 全 0，
+界面显示"全部正常"。
+
+改为按 `mtime` 取最新（`max(..., key=lambda p: (p.stat().st_mtime, p.name))`），
+文件名仅用于平手时的确定性排序。同时 `_risk_path()` 的 pattern 从 `risk_*.json`
+放宽为 `risk*.json` —— `smoke` 批次写的是 `risk.json`，无下划线，原 pattern 一个都匹配不到。
+
+实测 `full_rerun` 从一个批次读出 **15 中风险 / 最高 61.3 分**，修正后为
+**38 中风险 / 1 高风险 / 最高 80.2 分**。
+
+#### 缺陷 2：`analysis_target=0` 被 falsy 吞掉，非监管对象混入清单
+
+`str(record.get("analysis_target") or "")` —— `0` 是 falsy，被 `or` 换成空串，
+判据随即走"缺字段即视为监管对象"的兜底分支。11 辆非监管对象全部进了复核清单。
+
+新增 `_is_analysis_target()`，显式区分 `None`/`""`（缺字段，按监管对象处理）与
+字面 `"0"`。`review_rows` 从 443 条降到 **432**，与 `non_target_count=11` 对得上。
+
+#### 缺陷 3：`gamma=0.0` 被 `or 0.25` 回填，界面自相矛盾
+
+`components.get("gamma", 0.25) or 0.25` —— 融合层如实写回 `gamma=0.0`（T 被剔除），
+被 `or` 换回 0.25，界面一边说"频次占 25%"，一边说"频次无数据"。
+
+改为 `_weight()` 显式判空，只有 `None`/`""` 才取标称值。
+
+#### 缺陷 4：总分用三项相加，与融合层差 0.1
+
+`sum(points.values())` 会因各分量先四舍五入到 0.1 再相加，出现 80.3 vs 80.2 的偏差。
+改为优先读融合层写回的 `risk_score_100`，仅在字段缺失时回退到相加。
+
+#### 缺陷 5：份额分母用了封顶后的总分，单路分量算出 133%
+
+`shares = 100 * points[key] / total`。`points` 是**未封顶**的贡献
+（`100 × w × v`），`total` 却是**封顶后**的 R。单路分量贡献 100 分、被压到 75 分后，
+界面显示「关系 100（133%）」—— 一个不可能成立的占比。
+
+分母改为原始加权分（`risk_score_raw_100`，缺失时回退到 `points` 求和），
+并用最大余数法收掉四舍五入尾差，保证份额恒为 100%。验证：
+
+```text
+smoke（单路封顶）      total 75.0  points{G:100.0}  shares{G:100}  sum 100
+full_rerun（A/G 两路） total 80.2  points{A:33.6,G:46.7}  shares{A:42,G:58}  sum 100
+```
+
+这个缺陷是自查接口输出时发现的：133% 不会让页面报错，但会让看的人怀疑整套分数。
+
+#### 展示口径（`web/console/app.js` + `style.css`）
+
+- **分量无数据**：分数构成行显示「频次 无数据」而不是「频次 0（25%）」——
+  这是本次最关键的语义修正，"没有数据"与"数据表明很干净"是两回事。
+- **封顶**：详情页加红色警示条「分数已封顶：原始加权分 100.0 分，因仅 1 路分量可用，
+  按证据充分性压至 75.0 分。高风险需至少两路独立证据。」；复核列表该行分数后加
+  `封顶` 小红标，`title` 带原始分，鼠标悬停可追溯。
+- **非监管对象**：KPI 区新增独立卡片，与监管对象数量分列，不再混在分母里。
+- **图谱可比性**：`graph_anomaly_comparable=false` 时横幅提示「本轮图谱为同图自参照，
+  G 只能做批内排序，不可跨批次比较」。
+- **旧产物兼容**：`run_detail` 对没有 `graph_anomaly_self_referential` 的旧产物，
+  从 `graph_anomaly_method != "gae_baseline"` 反推，避免旧批次显示为"可比"。
+  横幅层则对缺 `components_available` 的旧批次如实提示「本批次为旧口径产物，
+  未记录分量可用性，分数构成按标称权重显示，可能包含无数据的分量」——
+  不假装三路都有数据，也不凭空推断哪一路缺失。
+
+#### 验证
+
+```text
+pytest -q                              381 passed（原 366，新增 15）
+node tools/console_render_check.js     20 项检查全部通过
+node --check web/console/app.js        JS 语法 OK
+/api/runs/full_rerun                   medium=38 high=1 risk_max=80.2
+                                       non_target_count=11 total_vehicles=443
+                                       components_available={A:true, G:true, T:false}
+/api/runs/smoke/review                 1: 75.0 capped=true raw=100.0 avail=1 shares{G:100}
+                                       2: 75.0 capped=true raw=99.1  avail=1
+```
+
+`tools/console_render_check.js` 用 Node 内置 `vm` + 最小 DOM 桩跑真实 `app.js`，
+不依赖浏览器或 playwright，可在 CI 中复核渲染逻辑。
+
+#### 已知限制
+
+- **校验的是 DOM 结构，不是像素**：`console_render_check.js` 能确认文字与 class 正确，
+  但 `.score-capped` 红条的视觉观感（对比度、换行、移动端折行）仍需人眼过一遍。
+- **前端不做分数解释**：界面只标注"封顶"与"原始分"，不解释为什么单路证据不够——
+  这属于方法论文档的职责，避免界面文案随标定策略变动而腐化。
+
+### 新增 `REFERENCES.md`：技术文献与指标的对应关系
+
+新增 `REFERENCES.md`，24 条国内外文献，每条标注「对应本项目哪一层 / 支撑什么论断」。
+覆盖：异常检测基础、目标检测与跟踪、车辆行为建模、图表示学习与图异常、社区发现、
+车辆重识别、可解释性、大模型幻觉控制、国内综保区卡口应用背景。
+
+**关键条目（直接支撑现有文档中的论断）**：
+
+- **Traag et al. 2019（Leiden 论文）**：明确指出 Louvain 可能产生内部不连通的社区。
+  本项目用的正是 Louvain，"社区内连接稀疏"属方法已知性质而非实现缺陷，
+  此文为这一条已知限制提供了权威背书。
+- **Rudin 2019（Nature Machine Intelligence）**：主张高风险决策应使用本身可解释的模型。
+  支撑本项目"输出排查线索而非违规判定"与线性加权融合 R=αA+βG+γT 的设计正当性。
+- **黄超等 2020（模式识别与人工智能）**：国内最贴合的车辆异常行为检测综述，
+  其"行为表示 → 行为学习 → 行为建模"三段式与项目四层结构可逐段对应。
+
+**文档中同时明确了文献的能力边界**：指标 7/9/12/14/15 的 🔴 状态缺的是现场标注，
+不是方法参考。新增第十节"文献与指标的对应关系"表，逐项写明"文献能证明什么"与
+"文献不能证明什么"，避免用引用掩盖缺数据的事实。
+
+`scripts/delivery_check.py` 的 `REQUIRED_DOCS` 同步加入 `REFERENCES.md`，
+使其纳入交付门禁。验证：
+
+```text
+scripts/delivery_check.py    交付检查通过：5/5 项
+```
 
 ## 2026-11-20
 

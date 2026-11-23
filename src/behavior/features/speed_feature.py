@@ -18,6 +18,30 @@ class SpeedFeatureExtractor:
     ):
         self.scene = scene_geometry
         self.frame_rate = frame_rate
+        # 最近一次计算中被判定为跟踪跳变、并被剔除的帧数（供审计）
+        self.speed_outlier_count = 0
+
+    def _reject_spikes(self, speeds: np.ndarray) -> np.ndarray:
+        """剔除跟踪跳变造成的异常瞬时速度。
+
+        单帧内检测框跳变（换 ID、遮挡后重新关联）会在轨迹上留下几十到上百像素的
+        位移，换算成速度可达 100 km/h 以上，足以让 max_speed 和超速规则全部失真。
+        真实车辆在闸口车道的瞬时速度不会超过中位速度的 3 倍，超出者按中位数回填。
+        """
+        self.speed_outlier_count = 0
+        if len(speeds) < 5:
+            return speeds
+        median = float(np.median(speeds))
+        if median <= 0:
+            return speeds
+        limit = max(3.0 * median, 1.0)  # m/s
+        mask = speeds > limit
+        self.speed_outlier_count = int(np.count_nonzero(mask))
+        if self.speed_outlier_count == 0:
+            return speeds
+        cleaned = speeds.copy()
+        cleaned[mask] = median
+        return cleaned
 
     def compute_instant_speeds(
         self,
@@ -45,7 +69,7 @@ class SpeedFeatureExtractor:
             speed_ms = dist_m / delta_sec
             speeds.append(speed_ms)
 
-        return np.array(speeds)
+        return self._reject_spikes(np.array(speeds))
 
     def extract(
         self,
@@ -77,5 +101,6 @@ class SpeedFeatureExtractor:
             "speed_cv": round(
                 float(np.std(speeds)) / float(np.mean(speeds)), 4
             ) if float(np.mean(speeds)) > 1e-6 else 0.0,
+            "speed_outlier_count": int(self.speed_outlier_count),
             "instant_speeds": speeds.tolist(),
         }
