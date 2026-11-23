@@ -1,0 +1,2 @@
+from_camera_id,to_camera_id,distance_m,min_travel_sec,max_travel_sec,route_id,one_way,notes
+admin_in,admin_out,85,20,10800,admin_lane_in_to_out,true,行政通道进→出；上限 3 小时含场区内办事停留
