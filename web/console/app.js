@@ -216,6 +216,23 @@ function renderDetail(record) {
 
   body.appendChild(plateBlock);
 
+  // 1.8) 轨迹查看：把 trajectory_points 画成折线，按速度着色
+  const trajBlock = el("div", "traj-block");
+  const trajButton = el("button", "traj-toggle", "看行驶轨迹");
+  trajButton.type = "button";
+  const trajCanvas = document.createElement("canvas");
+  trajCanvas.className = "traj-canvas";
+  trajCanvas.style.display = "none";
+  trajButton.addEventListener("click", () => {
+    const showing = trajCanvas.style.display !== "none";
+    trajCanvas.style.display = showing ? "none" : "block";
+    trajButton.textContent = showing ? "看行驶轨迹" : "收起轨迹";
+    if (!showing) drawTrajectory(trajCanvas, record);
+  });
+  trajBlock.appendChild(trajButton);
+  trajBlock.appendChild(trajCanvas);
+  body.appendChild(trajBlock);
+
   // 2) 基本信息（不含算法参数）
   const head = el("div", "vehicle-head");
   head.appendChild(el("div", "vehicle-name", display.plate || display.plate_text || display.name || "未识别车牌"));
@@ -328,6 +345,50 @@ function renderDetail(record) {
   }
 }
 
+/**
+ * 顶部横幅文案（纯函数，便于直接断言）。
+ *
+ * 核心诉求是让用户知道"这次评分用了哪几路证据"。只写"未标定"不够：
+ * 缺分量、分数被压、图谱不可比，这三件事任何一件没说清，
+ * 用户都会把"只用了 1 路"读成"3 路都很干净"。
+ */
+function buildBanners(detail, status) {
+  const banners = [];
+  if (status && status.length) {
+    banners.push(`本批次为${status.join("、")}，结果仅供排查参考，不作为考核结论。`);
+  }
+
+  const available = detail.components_available || null;
+  if (available) {
+    const missing = ["A", "G", "T"].filter((key) => available[key] === false);
+    if (missing.length) {
+      const names = missing.map((key) => ({ A: "行为", G: "关系", T: "频次" })[key]);
+      banners.push(`本次评分未使用：${names.join("、")}（无可用数据），权重已在剩余分量间按比例重分配。`);
+    }
+  } else {
+    // 旧产物没写分量可用性。既不能假装三路都有数据（详情页会把"无数据"
+    // 显示成 0 分），也不能凭空推断哪一路缺失——只能如实说"这一批不知道"。
+    banners.push("本批次为旧口径产物，未记录分量可用性，分数构成按标称权重显示，可能包含无数据的分量。");
+  }
+
+  if (detail.score_ceiling && detail.score_ceiling < 100) {
+    const usable = available ? ["A", "G", "T"].filter((key) => available[key] !== false).length : null;
+    const usableText = usable === null ? "" : `仅 ${usable} 路分量可用，`;
+    const cappedText = detail.score_capped_count ? `（本批 ${detail.score_capped_count} 辆触顶）` : "";
+    banners.push(
+      `分数上限 ${detail.score_ceiling} 分：${usableText}高风险需至少两路独立证据${cappedText}。`
+    );
+  }
+
+  if (detail.graph && detail.graph.comparable === false && detail.graph.self_referential) {
+    banners.push(
+      "图谱「关系分」为本批自身标定（训练图即评分图），只能用于批内排序，不可与其他批次横向比较。"
+    );
+  }
+
+  return banners;
+}
+
 async function selectRun(runId) {
   state.activeRun = runId;
   state.activeVehicle = null;
@@ -344,37 +405,7 @@ async function selectRun(runId) {
   if (detail.checks && detail.checks.in_sample) status.push("样本内训练");
   setSysStatus(status);
 
-  // 顶部横幅要说清"这次评分用了哪几路证据"。只写"未标定"不够——
-  // 用户还需要知道哪一路没数据、分数上限是多少，否则会把"只用了 1 路"
-  // 读成"3 路都很干净"。
-  const banners = [];
-  if (status.length) {
-    banners.push(`本批次为${status.join("、")}，结果仅供排查参考，不作为考核结论。`);
-  }
-
-  const available = detail.components_available || null;
-  if (available) {
-    const missing = ["A", "G", "T"].filter((key) => available[key] === false);
-    if (missing.length) {
-      const names = missing.map((key) => ({ A: "行为", G: "关系", T: "频次" })[key]);
-      banners.push(`本次评分未使用：${names.join("、")}（无可用数据），权重已在剩余分量间按比例重分配。`);
-    }
-  }
-  if (detail.score_ceiling && detail.score_ceiling < 100) {
-    const usable = available ? ["A", "G", "T"].filter((key) => available[key] !== false).length : null;
-    const usableText = usable === null ? "" : `仅 ${usable} 路分量可用，`;
-    const cappedText = detail.score_capped_count ? `（本批 ${detail.score_capped_count} 辆触顶）` : "";
-    banners.push(
-      `分数上限 ${detail.score_ceiling} 分：${usableText}高风险需至少两路独立证据${cappedText}。`
-    );
-  }
-  if (detail.graph && detail.graph.comparable === false && detail.graph.self_referential) {
-    banners.push(
-      "图谱「关系分」为本批自身标定（训练图即评分图），只能用于批内排序，不可与其他批次横向比较。"
-    );
-  }
-
-  setBanner(banners.join("　"));
+  setBanner(buildBanners(detail, status).join("　"));
 
   const budget = Number($("budget").value || 20);
   const rows = await api(`/api/runs/${encodeURIComponent(runId)}/review?budget=${budget}&sort=${sortValue()}`);
@@ -416,7 +447,96 @@ async function boot() {
     });
   }
 
+  const journeyButton = $("journeys");
+  if (journeyButton) {
+    journeyButton.addEventListener("click", () => loadJourneys());
+    $("journey-close").addEventListener("click", () => $("journey-panel").classList.add("hidden"));
+  }
   if (state.runs.length) await selectRun(state.runs[0].id);
 }
 
 boot().catch((error) => setBanner(`加载失败：${error.message}`));
+
+// 把轨迹点画出来：按速度着色（快=红，慢=绿），标出入口
+function drawTrajectory(canvas, record) {
+  const raw = String(record.trajectory_points || "");
+  const pts = raw.split(";").filter(Boolean).map((pair) => pair.split(",").map(Number)).filter((p) => p.length === 2 && isFinite(p[0]) && isFinite(p[1]));
+  const W = 960, H = 540;
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#1e293b";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y <= H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  if (pts.length < 2) {
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "16px Microsoft YaHei";
+    ctx.fillText("该车没有可用轨迹点", 30, 40);
+    return;
+  }
+  const sx = W / 1920, sy = H / 1080;
+  const speeds = (record.traj_speeds_ms || []).map(Number);
+  const maxSpeed = speeds.length ? Math.max.apply(null, speeds) : 0;
+  for (let i = 1; i < pts.length; i++) {
+    const t = speeds.length === pts.length - 1 ? (maxSpeed > 0 ? speeds[i - 1] / maxSpeed : 0.5) : 0.5;
+    const hue = 120 - 120 * Math.min(1, Math.max(0, t));  // 绿 -> 红
+    ctx.strokeStyle = `hsl(${hue}, 85%, 55%)`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pts[i - 1][0] * sx, pts[i - 1][1] * sy);
+    ctx.lineTo(pts[i][0] * sx, pts[i][1] * sy);
+    ctx.stroke();
+  }
+  const start = pts[0], end = pts[pts.length - 1];
+  ctx.fillStyle = "#22c55e";
+  ctx.beginPath(); ctx.arc(start[0] * sx, start[1] * sy, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#ef4444";
+  ctx.beginPath(); ctx.arc(end[0] * sx, end[1] * sy, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.font = "14px Microsoft YaHei";
+  ctx.fillStyle = "#e2e8f0";
+  const len = record.trajectory_length_m ? Number(record.trajectory_length_m).toFixed(1) : "—";
+  const dur = record.duration_sec ? Number(record.duration_sec).toFixed(1) : "—";
+  const legend = speeds.length ? "绿=慢 红=快" : "按时间顺序绘制";
+  ctx.fillText(`轨迹长度 ${len} m ｜ 通过用时 ${dur} s ｜ ${legend}`, 16, 26);
+  ctx.fillStyle = "#22c55e"; ctx.fillText("● 进入", 16, 50);
+  ctx.fillStyle = "#ef4444"; ctx.fillText("● 离开", 80, 50);
+}
+
+// 跨机位行程面板
+async function loadJourneys() {
+  const panel = $("journey-panel");
+  const list = $("journey-list");
+  panel.classList.remove("hidden");
+  list.innerHTML = "<div class='dim'>加载中…</div>";
+  try {
+    const data = await api("/api/journeys");
+    const journeys = data.journeys || [];
+    $("journey-count").textContent = data.journey_count ? `共 ${data.journey_count} 条` : "暂无数据";
+    if (!journeys.length) {
+      list.innerHTML = "<div class='dim'>还没有行程数据。先跑两路机位，再执行 scripts/build_journeys.py。</div>";
+      return;
+    }
+    list.innerHTML = "";
+    for (const journey of journeys) {
+      const legs = journey.legs || [];
+      const a = legs[0] || {};
+      const b = legs[1] || {};
+      const row = el("div", "journey-row");
+      const gap = Number(journey.travel_sec || 0);
+      const mins = Math.floor(gap / 60);
+      const secs = Math.round(gap % 60);
+      const sim = Number(journey.similarity || 0);
+      const cls = sim >= 0.8 ? "sim-good" : sim >= 0.7 ? "sim-mid" : "sim-bad";
+      row.appendChild(el("div", "journey-id", journey.global_id || ""));
+      row.appendChild(el("div", "journey-times", `${fmtTime(a.enter_time)} 进 → ${fmtTime(b.enter_time)} 出`));
+      row.appendChild(el("div", "journey-gap", mins > 0 ? `${mins} 分 ${secs} 秒` : `${secs} 秒`));
+      row.appendChild(el("div", `journey-sim ${cls}`, sim.toFixed(2)));
+      list.appendChild(row);
+    }
+  } catch (error) {
+    list.innerHTML = `<div class='dim'>加载失败：${error.message}</div>`;
+  }
+}

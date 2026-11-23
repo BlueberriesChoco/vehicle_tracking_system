@@ -599,6 +599,43 @@ def test_score_parts_legacy_record_has_no_capping():
     assert parts["raw_total"] is None
 
 
+def test_score_parts_shares_use_raw_base_under_capping():
+    """封顶时份额的分母要用原始加权分，不能除以封顶后的总分。
+
+    单路分量贡献 100 分、被压到 75 分后，若按 100/75 算份额会得到 133%，
+    界面出现"关系 100（133%）"这种不可能的占比。
+    """
+    record = {
+        "risk_score_100": 75.0,
+        "risk_score_raw_100": 100.0,
+        "risk_score_ceiling": 75.0,
+        "risk_score_capped": 1,
+        "risk_components": {"A": 0.0, "G": 1.0, "T": 0.0,
+                            "alpha": 0.0, "beta": 1.0, "gamma": 0.0},
+        "risk_component_available": {"A": 0, "G": 1, "T": 0},
+    }
+
+    parts = web.score_parts(record)
+
+    assert parts["shares"]["G"] == 100
+    assert sum(parts["shares"].values()) == 100
+
+
+def test_score_parts_shares_sum_to_hundred():
+    """三路分量齐全时份额必须正好 100%，四舍五入的尾差要收掉。"""
+    record = {
+        "risk_score_100": 80.2,
+        "risk_components": {"A": 0.6, "G": 1.0, "T": 0.0,
+                            "alpha": 0.5333, "beta": 0.4667, "gamma": 0.0},
+        "risk_component_available": {"A": 1, "G": 1, "T": 1},
+    }
+
+    parts = web.score_parts(record)
+
+    assert all(0 <= value <= 100 for value in parts["shares"].values())
+    assert sum(parts["shares"].values()) == 100
+
+
 def test_run_detail_infers_comparability_for_legacy_graph(tmp_path):
     """旧图谱没有 comparable 字段时按 method 推断，避免详情页漏提示。"""
     root = _fake_root(tmp_path)
@@ -630,3 +667,30 @@ def test_run_detail_reads_declared_comparability(tmp_path):
 
     assert detail["graph"]["comparable"] is True
     assert detail["graph"]["self_referential"] is False
+
+
+def test_journeys_endpoint(tmp_path):
+    """跨机位行程接口：无文件时返回空，有文件时原样返回。"""
+    root = _fake_root(tmp_path)
+    server = web.serve("127.0.0.1", 0, root, allow_runs=False)
+    port = server.server_address[1]
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/journeys", timeout=5) as response:
+            empty = json.loads(response.read())
+        assert empty["journey_count"] == 0
+
+        payload = {
+            "journey_count": 1,
+            "journeys": [
+                {"global_id": "G0001", "travel_sec": 90.0, "similarity": 0.9,
+                 "legs": [{"camera": "admin_in", "passage_id": "a"},
+                          {"camera": "admin_out", "passage_id": "b"}]}
+            ],
+        }
+        (root / "journeys.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/journeys", timeout=5) as response:
+            loaded = json.loads(response.read())
+        assert loaded["journey_count"] == 1
+        assert loaded["journeys"][0]["legs"][1]["camera"] == "admin_out"
+    finally:
+        server.shutdown()

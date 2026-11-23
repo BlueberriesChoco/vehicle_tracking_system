@@ -252,14 +252,27 @@ def score_parts(record: dict) -> dict:
     # 列表和详情显示的数字对不上，一线会怀疑哪一个是错的。
     reported = _to_float(record.get("risk_score_100"), None)
     total = round(reported, 1) if reported is not None else round(sum(points.values()), 1)
-    shares = {key: (round(100 * points[key] / total) if total else 0) for key in points}
+    raw = _to_float(record.get("risk_score_raw_100"), None)
+
+    # 份额的分母必须是**封顶前**的原始加权分。
+    # ``points`` 存的是未封顶的贡献（100 × w × v），若除以封顶后的 ``total``，
+    # 单路分量会算出 100/75 = 133% 这种不可能的占比，界面直接自相矛盾。
+    base = raw if raw is not None and raw > 0 else sum(points.values())
+    if base:
+        exact = {key: 100.0 * points[key] / base for key in points}
+        shares = {key: int(round(value)) for key, value in exact.items()}
+        # 最大余数法收尾差：三路齐全时必须正好 100%，否则界面出现 99% 或 101%
+        gap = 100 - sum(shares.values())
+        if gap:
+            shares[max(shares, key=lambda key: shares[key])] += gap
+    else:
+        shares = {key: 0 for key in points}
 
     # 证据封顶：只剩一路分量可用时，融合层把分数压到 75 分（低于 80 分档）。
     # 界面必须说清"这是被压过的分"，否则一线看到 R=75 会当成原始分，
     # 进而误判这辆车"离高风险只差 5 分"。
     ceiling = _to_float(record.get("risk_score_ceiling"), 100.0)
     capped = str(record.get("risk_score_capped", 0)).strip() in {"1", "True", "true"}
-    raw = _to_float(record.get("risk_score_raw_100"), None)
 
     return {
         "points": points,
@@ -736,6 +749,13 @@ class ConsoleHandler(BaseHTTPRequestHandler):
 
         if parts[:2] == ["api", "health"]:
             return self._json({"ok": True, "root": str(self.root), "allow_runs": self.allow_runs})
+
+        # 跨机位行程：由 scripts/build_journeys.py 生成，放在输出根目录
+        if parts[:2] == ["api", "journeys"]:
+            path = self.root / "journeys.json"
+            if not path.is_file():
+                return self._json({"journey_count": 0, "journeys": [], "note": "尚未生成 journeys.json"})
+            return self._json(_read_json(path))
 
         if parts[:2] == ["api", "runs"]:
             if len(parts) == 2:

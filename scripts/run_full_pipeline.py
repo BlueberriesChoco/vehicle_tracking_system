@@ -86,6 +86,10 @@ def main():
     parser.add_argument("--config", default="config/default.yaml", help="Global config")
     parser.add_argument("--output", default="data/outputs", help="Output root")
     parser.add_argument("--max-frames", type=int, default=0, help="Max frames per video (0 = all)")
+    parser.add_argument(
+        "--start-frame", type=int, default=0,
+        help="起始帧偏移（用于从长录像中截取与另一机位时间对齐的片段）",
+    )
     parser.add_argument("--device", type=int, default=0, help="GPU id (-1 = CPU)")
     parser.add_argument("--retrain", action="store_true", help="Demo only: train on the scoring batch")
     parser.add_argument("--iforest", help="Pretrained Isolation Forest JSON")
@@ -163,7 +167,10 @@ def main():
         if hour_counts[key] > 1:
             seen[key] = seen.get(key, 0) + 1
             suffix = f"{seen[key]:02d}"
-        vector_path = processor.process_video(video_path=source, output_dir=outputs, name_suffix=suffix)
+        vector_path = processor.process_video(
+        video_path=source, output_dir=outputs, name_suffix=suffix,
+        start_frame=args.start_frame,
+    )
         rows.extend(load_vectors(vector_path))
     if not rows:
         logger.error("No vectors produced.")

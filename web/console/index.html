@@ -32,6 +32,7 @@
         </select>
       </label>
       <button id="refresh" type="button">刷新</button>
+      <button id="journeys" type="button">跨机位行程</button>
     </div>
   </header>
 
@@ -64,7 +65,18 @@
       <div id="detailEmpty" class="empty">从中间列表选一辆车</div>
       <div id="detailBody" class="hidden"></div>
     </section>
-  </main>
+    <div id="journey-panel" class="journey-panel hidden">
+    <div class="journey-head">
+      <strong>跨机位行程</strong>
+      <span id="journey-count" class="dim"></span>
+      <button id="journey-close" type="button">关闭</button>
+    </div>
+    <div class="journey-hint">
+      每行是一辆车：在「进」机位通过后，多长时间出现在「出」机位。相似度是外观匹配分，低于 0.7 的需人工复核。
+    </div>
+    <div id="journey-list" class="journey-list"></div>
+  </div>
+</main>
 
   <script src="/app.js"></script>
 </body>
