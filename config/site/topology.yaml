@@ -87,52 +87,16 @@ edges:
   distance_m: 365.4
   notes: 由道路链自动生成
 - from_camera_id: 围网13
-  to_camera_id: 围网11
-  min_travel_sec: 20
-  max_travel_sec: 1916
-  distance_m: 64.3
-  notes: 由道路链自动生成
-- from_camera_id: 围网11
-  to_camera_id: 围网13
-  min_travel_sec: 20
-  max_travel_sec: 1916
-  distance_m: 64.3
-  notes: 由道路链自动生成
-- from_camera_id: 围网11
-  to_camera_id: 围网10
-  min_travel_sec: 20
-  max_travel_sec: 1918
-  distance_m: 65.3
-  notes: 由道路链自动生成
-- from_camera_id: 围网10
-  to_camera_id: 围网11
-  min_travel_sec: 20
-  max_travel_sec: 1918
-  distance_m: 65.3
-  notes: 由道路链自动生成
-- from_camera_id: 围网10
-  to_camera_id: 围网9
-  min_travel_sec: 20
-  max_travel_sec: 1829
-  distance_m: 15.9
-  notes: 由道路链自动生成
-- from_camera_id: 围网9
-  to_camera_id: 围网10
-  min_travel_sec: 20
-  max_travel_sec: 1829
-  distance_m: 15.9
-  notes: 由道路链自动生成
-- from_camera_id: 围网9
   to_camera_id: 围网3
-  min_travel_sec: 36
-  max_travel_sec: 2245
-  distance_m: 247.1
+  min_travel_sec: 57
+  max_travel_sec: 2507
+  distance_m: 392.6
   notes: 由道路链自动生成
 - from_camera_id: 围网3
-  to_camera_id: 围网9
-  min_travel_sec: 36
-  max_travel_sec: 2245
-  distance_m: 247.1
+  to_camera_id: 围网13
+  min_travel_sec: 57
+  max_travel_sec: 2507
+  distance_m: 392.6
   notes: 由道路链自动生成
 - from_camera_id: 围网3
   to_camera_id: 广兴路西
@@ -781,18 +745,6 @@ edges:
   min_travel_sec: 20
   max_travel_sec: 1884
   distance_m: 46.9
-  notes: 由道路链自动生成
-- from_camera_id: 围网7
-  to_camera_id: 围网8
-  min_travel_sec: 20
-  max_travel_sec: 1919
-  distance_m: 66.1
-  notes: 由道路链自动生成
-- from_camera_id: 围网8
-  to_camera_id: 围网7
-  min_travel_sec: 20
-  max_travel_sec: 1919
-  distance_m: 66.1
   notes: 由道路链自动生成
 - from_camera_id: 围网42
   to_camera_id: 围网43

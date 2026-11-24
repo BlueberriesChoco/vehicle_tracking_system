@@ -45,6 +45,20 @@ def load_aliases(path: str) -> dict:
             if (row.get("folder_name") or "").strip() and (row.get("camera_id") or "").strip()
         }
 
+
+def load_scope(path: str) -> set:
+    """读取 camera_scope.csv，返回 in_scope=false 的机位集合。"""
+    if not path or not os.path.isfile(path):
+        return set()
+    excluded = set()
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            camera_id = (row.get("camera_id") or "").strip()
+            flag = (row.get("in_scope") or "").strip().lower()
+            if camera_id and flag in {"false", "0", "no"}:
+                excluded.add(camera_id)
+    return excluded
+
 def load_layout(path: str) -> dict:
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
@@ -156,6 +170,7 @@ def main() -> None:
     parser.add_argument("--edges", default="config/site/topology_edges.csv")
     parser.add_argument("--max-offset-px", type=float, default=60.0, help="机位离道路多远仍算在这条路上")
     parser.add_argument("--aliases", default="config/site/camera_aliases.csv", help="目录名 -> camera_id 映射")
+    parser.add_argument("--scope", default="config/site/camera_scope.csv", help="机位适用范围（in_scope=false 的剔除）")
     args = parser.parse_args()
 
     layout = load_layout(args.layout)
@@ -166,6 +181,9 @@ def main() -> None:
     if meters_per_pixel <= 0:
         raise SystemExit("必须给 --meters-per-pixel 或 --map-width-m（园区图没有内置比例尺）")
 
+    excluded = load_scope(args.scope)
+    if excluded:
+        layout["cameras"] = [c for c in layout.get("cameras", []) if c.get("id") not in excluded]
     aliases = load_aliases(args.aliases)
     cameras, edges = build(layout, meters_per_pixel, args.max_offset_px)
     for camera in cameras:

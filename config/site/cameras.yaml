@@ -64,11 +64,6 @@ cameras:
   map_xy:
   - 483
   - 1196
-- camera_id: 围网10
-  camera_name: 围网10
-  map_xy:
-  - 298
-  - 1064
 - camera_id: 围网100
   camera_name: 围网100
   map_xy:
@@ -119,11 +114,6 @@ cameras:
   map_xy:
   - 894
   - 431
-- camera_id: 围网11
-  camera_name: 围网11
-  map_xy:
-  - 262
-  - 1047
 - camera_id: 围网110
   camera_name: 围网110
   map_xy:
@@ -379,16 +369,6 @@ cameras:
   map_xy:
   - 314
   - 1145
-- camera_id: 围网8
-  camera_name: 围网8
-  map_xy:
-  - 277
-  - 1129
-- camera_id: 围网9
-  camera_name: 围网9
-  map_xy:
-  - 293
-  - 1099
 - camera_id: 围网91
   camera_name: 围网91
   map_xy:
