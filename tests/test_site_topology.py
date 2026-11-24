@@ -7,10 +7,11 @@ def test_site_topology_loads_default_config():
     topology = SiteTopology("config/site")
 
     assert topology.site["site_id"] == "bonded_zone_demo"
-    assert topology.get_camera("cam01")["road_id"] == "zone_a_nmv_entrance_lane"
-    assert topology.get_camera_road("cam01")["zone_id"] == "zone_a_gate_nmv_entrance"
-    assert topology.get_camera_zone("cam01")["type"] == "gate"
     assert topology.validate() == []
+    # 生产 cameras.yaml 已由落图工具导出的真实机位替换，演示用的 cam01 不再存在
+    assert topology.cameras
+    assert topology.get_camera("admin_in") is not None
+    assert topology.get_camera("admin_out") is not None
 
 
 def test_site_topology_reports_missing_references(tmp_path: Path):

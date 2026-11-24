@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_MAX_SPEED_KMH = 20.0
 DEFAULT_MIN_SPEED_KMH = 3.0
 MIN_WINDOW_FLOOR_SEC = 20
+DEFAULT_DWELL_SEC = 1800  # 场区内默认停留预算：车辆在查验平台/卡口前会停一会儿
 MAX_WINDOW_CEIL_SEC = 12 * 3600
 
 
@@ -66,6 +67,7 @@ def derive_window(
     max_travel_sec: Optional[float],
     max_speed_kmh: float = DEFAULT_MAX_SPEED_KMH,
     min_speed_kmh: float = DEFAULT_MIN_SPEED_KMH,
+    dwell_sec: float = 0.0,
 ) -> tuple:
     """返回 (min_sec, max_sec)。缺失值按距离与车速推算。"""
     low, high = min_travel_sec, max_travel_sec
@@ -73,7 +75,7 @@ def derive_window(
     if low is None and distance_m:
         low = distance_m / (max_speed_kmh / 3.6) * 0.8
     if high is None and distance_m:
-        high = distance_m / (min_speed_kmh / 3.6) * 1.5
+        high = distance_m / (min_speed_kmh / 3.6) * 1.5 + dwell_sec
 
     low = MIN_WINDOW_FLOOR_SEC if low is None else max(low, MIN_WINDOW_FLOOR_SEC)
     high = MAX_WINDOW_CEIL_SEC if high is None else min(high, MAX_WINDOW_CEIL_SEC)
@@ -82,12 +84,42 @@ def derive_window(
     return int(round(low)), int(round(high))
 
 
+
+def load_overrides(path: str) -> dict:
+    """人工覆盖表：(from,to) -> {min_travel_sec, max_travel_sec, reason}。
+
+    自动生成的时间窗会被业务知识覆盖——例如行政通道有车停留 3 小时，
+    按距离推出来的 31 分钟会把真实链路全部剪掉。
+    """
+    if not path or not os.path.isfile(path):
+        return {}
+    overrides = {}
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            source = (row.get("from_camera_id") or "").strip()
+            target = (row.get("to_camera_id") or "").strip()
+            if not source or not target:
+                continue
+            entry = {}
+            low = parse_float(row.get("min_travel_sec"))
+            high = parse_float(row.get("max_travel_sec"))
+            if low is not None:
+                entry["min_travel_sec"] = int(low)
+            if high is not None:
+                entry["max_travel_sec"] = int(high)
+            reason = (row.get("reason") or "").strip()
+            if reason:
+                entry["reason"] = reason
+            if entry:
+                overrides[(source, target)] = entry
+    return overrides
+
 def load_edges(path: str) -> List[dict]:
     with open(path, encoding="utf-8-sig", newline="") as handle:
         return [row for row in csv.DictReader(handle) if (row.get("from_camera_id") or "").strip()]
 
 
-def build_topology(rows: List[dict], camera_ids: set) -> tuple:
+def build_topology(rows: List[dict], camera_ids: set, dwell_sec: float = 0.0) -> tuple:
     """把边表转成 topology.yaml 结构，同时返回问题清单。"""
     edges: List[dict] = []
     problems: List[str] = []
@@ -112,7 +144,7 @@ def build_topology(rows: List[dict], camera_ids: set) -> tuple:
         distance = parse_float(row.get("distance_m"))
         low = parse_float(row.get("min_travel_sec"))
         high = parse_float(row.get("max_travel_sec"))
-        low, high = derive_window(distance, low, high)
+        low, high = derive_window(distance, low, high, dwell_sec=dwell_sec)
 
         edge = {
             "from_camera_id": source,
@@ -170,11 +202,21 @@ def main() -> None:
     parser.add_argument("--cameras", default="config/site/cameras.yaml")
     parser.add_argument("--output", default="config/site/topology.yaml")
     parser.add_argument("--check", action="store_true", help="只检查，不写文件")
+    parser.add_argument("--dwell-sec", type=float, default=DEFAULT_DWELL_SEC, help="未填 max 时附加的停留预算（秒）")
+    parser.add_argument("--overrides", default="config/site/topology_overrides.csv", help="人工覆盖表")
     args = parser.parse_args()
 
     camera_ids = load_camera_ids(args.cameras)
     rows = load_edges(args.edges)
-    edges, problems = build_topology(rows, camera_ids)
+    edges, problems = build_topology(rows, camera_ids, dwell_sec=args.dwell_sec)
+    overrides = load_overrides(args.overrides)
+    for edge in edges:
+        patch = overrides.get((edge["from_camera_id"], edge["to_camera_id"]))
+        if patch:
+            edge.update({k: v for k, v in patch.items() if k != "reason"})
+            reason = str(patch.get("reason", ""))
+            if reason:
+                edge["notes"] = "人工覆盖：" + reason
     report = connectivity_report(edges, camera_ids)
 
     print(yaml.safe_dump({"connectivity": report}, allow_unicode=True, sort_keys=False))

@@ -1,0 +1,3 @@
+from_camera_id,to_camera_id,min_travel_sec,max_travel_sec,reason
+admin_in,admin_out,20,10800,行政通道进→出；实测有车在区内办事 1-3 小时，自动推算的 31 分钟会把真实链路剪掉
+admin_out,admin_in,20,10800,同上（反向）

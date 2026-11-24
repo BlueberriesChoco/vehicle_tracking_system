@@ -1,34 +1,176 @@
 cameras:
-  - camera_id: cam01
-    name: "Camera cam01"
-    zone_id: zone_a_gate_nmv_entrance
-    road_id: zone_a_nmv_entrance_lane
-    role: gate_overview
-    config_file: "config/camera/cam01.yaml"
-    stream_url: null
-    video_dir: "F:/test_videos/zone_a_nmv_entrance"
-    supports_plate_capture: false
-    supports_reid: true
-    notes: "Overview video can support tracking and vehicle attributes; plate OCR needs a closer camera or dedicated plate model."
-
-  - camera_id: admin_in
-    name: "综保A区行政车道进"
-    zone_id: zone_a_admin_lane
-    road_id: zone_a_admin_lane_in
-    role: admin_lane_entry
-    config_file: "config/camera/admin_in.yaml"
-    video_dir: "F:/A区录像 新/行政车道进"
-    supports_plate_capture: false
-    supports_reid: true
-    notes: "行政通道入口；车辆由远端驶向镜头，已现场标定 ROI 与进出线。"
-
-  - camera_id: admin_out
-    name: "综保A区行政车道出"
-    zone_id: zone_a_admin_lane
-    road_id: zone_a_admin_lane_out
-    role: admin_lane_exit
-    config_file: "config/camera/admin_out.yaml"
-    video_dir: "F:/A区录像 新/行政车道出"
-    supports_plate_capture: false
-    supports_reid: true
-    notes: "行政通道出口；车道为右上到左下的对角走廊，ROI 由真实轨迹反推。"
+- camera_id: 查验平台东
+  camera_name: 查验平台东
+  map_xy:
+  - 633
+  - 1054
+- camera_id: 查验平台西
+  camera_name: 查验平台西
+  map_xy:
+  - 612
+  - 1046
+- camera_id: 广兴路东
+  camera_name: 广兴路东
+  map_xy:
+  - 482
+  - 1151
+- camera_id: 广兴路西
+  camera_name: 广兴路西
+  map_xy:
+  - 466
+  - 1145
+- camera_id: 卡口非机动车道
+  camera_name: 卡口非机动车道
+  map_xy:
+  - 513
+  - 1181
+- camera_id: 内卡场地东北
+  camera_name: 内卡场地东北
+  map_xy:
+  - 641
+  - 1020
+- camera_id: 内卡场地西
+  camera_name: 内卡场地西
+  map_xy:
+  - 615
+  - 992
+- camera_id: 内卡口10
+  camera_name: 内卡口10
+  map_xy:
+  - 664
+  - 1010
+- camera_id: 内卡口11
+  camera_name: 内卡口11
+  map_xy:
+  - 678
+  - 1016
+- camera_id: 内卡口2
+  camera_name: 内卡口2
+  map_xy:
+  - 637
+  - 1001
+- camera_id: 内卡口3
+  camera_name: 内卡口3
+  map_xy:
+  - 601
+  - 1018
+- camera_id: 内卡口4
+  camera_name: 内卡口4
+  map_xy:
+  - 607
+  - 1005
+- camera_id: 围网41
+  camera_name: 围网41
+  map_xy:
+  - 868
+  - 1139
+- camera_id: 围网42
+  camera_name: 围网42
+  map_xy:
+  - 851
+  - 1173
+- camera_id: 围网43
+  camera_name: 围网43
+  map_xy:
+  - 836
+  - 1211
+- camera_id: 围网44
+  camera_name: 围网44
+  map_xy:
+  - 810
+  - 1248
+- camera_id: 围网45
+  camera_name: 围网45
+  map_xy:
+  - 789
+  - 1285
+- camera_id: 围网46
+  camera_name: 围网46
+  map_xy:
+  - 771
+  - 1331
+- camera_id: 围网47
+  camera_name: 围网47
+  map_xy:
+  - 751
+  - 1363
+- camera_id: 围网48
+  camera_name: 围网48
+  map_xy:
+  - 718
+  - 1360
+- camera_id: 围网49
+  camera_name: 围网49
+  map_xy:
+  - 702
+  - 1376
+- camera_id: 围网50
+  camera_name: 围网50
+  map_xy:
+  - 672
+  - 1362
+- camera_id: 围网51
+  camera_name: 围网51
+  map_xy:
+  - 638
+  - 1348
+- camera_id: 围网52
+  camera_name: 围网52
+  map_xy:
+  - 611
+  - 1335
+- camera_id: 围网53
+  camera_name: 围网53
+  map_xy:
+  - 576
+  - 1321
+- camera_id: 围网54
+  camera_name: 围网54
+  map_xy:
+  - 545
+  - 1305
+- camera_id: 围网55
+  camera_name: 围网55
+  map_xy:
+  - 514
+  - 1291
+- camera_id: 围网56
+  camera_name: 围网56
+  map_xy:
+  - 527
+  - 1240
+- camera_id: 物流仓库东
+  camera_name: 物流仓库东
+  map_xy:
+  - 638
+  - 1221
+- camera_id: admin_out
+  camera_name: 行政车道出
+  map_xy:
+  - 477
+  - 1199
+- camera_id: admin_in
+  camera_name: 行政车道进
+  map_xy:
+  - 494
+  - 1209
+- camera_id: 中央路北
+  camera_name: 中央路北
+  map_xy:
+  - 633
+  - 936
+- camera_id: 中央路南
+  camera_name: 中央路南
+  map_xy:
+  - 626
+  - 948
+- camera_id: 主卡口内Q2
+  camera_name: 主卡口内Q2
+  map_xy:
+  - 505
+  - 1168
+- camera_id: 主卡口外Q1
+  camera_name: 主卡口外Q1
+  map_xy:
+  - 472
+  - 1253

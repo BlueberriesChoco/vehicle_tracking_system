@@ -67,3 +67,21 @@ def test_generated_file_round_trips():
 
     topology = SiteTopology("config/site")
     assert getattr(topology, "edges", None)
+
+
+def test_dwell_allowance_extends_max_window():
+    """未填 max 时要加上场区内停留预算，否则真实长停留链路会被剪掉。"""
+    low, high = derive_window(30.0, None, None, dwell_sec=1800)
+
+    assert low == 20
+    assert high >= 1800
+
+
+def test_override_beats_derived_window():
+    """人工覆盖表优先级最高（例如行政通道 3 小时停留）。"""
+    from scripts.build_topology import load_overrides
+
+    overrides = load_overrides("config/site/topology_overrides.csv")
+
+    assert ("admin_in", "admin_out") in overrides
+    assert overrides[("admin_in", "admin_out")]["max_travel_sec"] == 10800

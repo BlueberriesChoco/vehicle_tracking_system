@@ -1,0 +1,3 @@
+folder_name,camera_id,notes
+行政车道进,admin_in,行政车道入口机位，已有 config/camera/admin_in.yaml
+行政车道出,admin_out,行政车道出口机位，已有 config/camera/admin_out.yaml

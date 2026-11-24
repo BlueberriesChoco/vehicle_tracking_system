@@ -33,6 +33,18 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+
+def load_aliases(path: str) -> dict:
+    """录像目录名 -> 管线 camera_id 的映射（如 行政车道进 -> admin_in）。"""
+    if not path or not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8-sig", newline="") as handle:
+        return {
+            (row.get("folder_name") or "").strip(): (row.get("camera_id") or "").strip()
+            for row in csv.DictReader(handle)
+            if (row.get("folder_name") or "").strip() and (row.get("camera_id") or "").strip()
+        }
+
 def load_layout(path: str) -> dict:
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
@@ -127,6 +139,7 @@ def main() -> None:
     parser.add_argument("--cameras", default="config/site/cameras.yaml")
     parser.add_argument("--edges", default="config/site/topology_edges.csv")
     parser.add_argument("--max-offset-px", type=float, default=60.0, help="机位离道路多远仍算在这条路上")
+    parser.add_argument("--aliases", default="config/site/camera_aliases.csv", help="目录名 -> camera_id 映射")
     args = parser.parse_args()
 
     layout = load_layout(args.layout)
@@ -137,7 +150,13 @@ def main() -> None:
     if meters_per_pixel <= 0:
         raise SystemExit("必须给 --meters-per-pixel 或 --map-width-m（园区图没有内置比例尺）")
 
+    aliases = load_aliases(args.aliases)
     cameras, edges = build(layout, meters_per_pixel, args.max_offset_px)
+    for camera in cameras:
+        camera["id"] = aliases.get(camera["id"], camera["id"])
+    for edge in edges:
+        edge["from_camera_id"] = aliases.get(edge["from_camera_id"], edge["from_camera_id"])
+        edge["to_camera_id"] = aliases.get(edge["to_camera_id"], edge["to_camera_id"])
 
     os.makedirs(os.path.dirname(os.path.abspath(args.cameras)) or ".", exist_ok=True)
     with open(args.cameras, "w", encoding="utf-8") as handle:
