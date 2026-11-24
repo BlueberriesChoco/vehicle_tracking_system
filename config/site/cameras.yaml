@@ -1,39 +1,24 @@
 cameras:
-- camera_id: 查验平台东
-  camera_name: 查验平台东
+- camera_id: 中央路北
+  camera_name: 中央路北
   map_xy:
   - 633
-  - 1054
-- camera_id: 查验平台西
-  camera_name: 查验平台西
+  - 936
+- camera_id: 中央路南
+  camera_name: 中央路南
   map_xy:
-  - 612
-  - 1046
-- camera_id: 广兴路东
-  camera_name: 广兴路东
+  - 626
+  - 948
+- camera_id: 主卡口内Q2
+  camera_name: 主卡口内Q2
   map_xy:
-  - 482
-  - 1151
-- camera_id: 广兴路西
-  camera_name: 广兴路西
+  - 505
+  - 1168
+- camera_id: 主卡口外Q1
+  camera_name: 主卡口外Q1
   map_xy:
-  - 466
-  - 1145
-- camera_id: 卡口非机动车道
-  camera_name: 卡口非机动车道
-  map_xy:
-  - 513
-  - 1181
-- camera_id: 内卡场地东北
-  camera_name: 内卡场地东北
-  map_xy:
-  - 641
-  - 1020
-- camera_id: 内卡场地西
-  camera_name: 内卡场地西
-  map_xy:
-  - 615
-  - 992
+  - 472
+  - 1253
 - camera_id: 内卡口10
   camera_name: 内卡口10
   map_xy:
@@ -59,6 +44,246 @@ cameras:
   map_xy:
   - 607
   - 1005
+- camera_id: 内卡场地东北
+  camera_name: 内卡场地东北
+  map_xy:
+  - 641
+  - 1020
+- camera_id: 内卡场地西
+  camera_name: 内卡场地西
+  map_xy:
+  - 615
+  - 992
+- camera_id: 卡口非机动车道
+  camera_name: 卡口非机动车道
+  map_xy:
+  - 513
+  - 1181
+- camera_id: 围网1
+  camera_name: 围网1
+  map_xy:
+  - 483
+  - 1196
+- camera_id: 围网10
+  camera_name: 围网10
+  map_xy:
+  - 298
+  - 1064
+- camera_id: 围网100
+  camera_name: 围网100
+  map_xy:
+  - 586
+  - 521
+- camera_id: 围网101
+  camera_name: 围网101
+  map_xy:
+  - 616
+  - 507
+- camera_id: 围网102
+  camera_name: 围网102
+  map_xy:
+  - 630
+  - 471
+- camera_id: 围网103
+  camera_name: 围网103
+  map_xy:
+  - 654
+  - 431
+- camera_id: 围网104
+  camera_name: 围网104
+  map_xy:
+  - 690
+  - 430
+- camera_id: 围网105
+  camera_name: 围网105
+  map_xy:
+  - 728
+  - 433
+- camera_id: 围网106
+  camera_name: 围网106
+  map_xy:
+  - 768
+  - 432
+- camera_id: 围网107
+  camera_name: 围网107
+  map_xy:
+  - 809
+  - 432
+- camera_id: 围网108
+  camera_name: 围网108
+  map_xy:
+  - 851
+  - 431
+- camera_id: 围网109
+  camera_name: 围网109
+  map_xy:
+  - 894
+  - 431
+- camera_id: 围网11
+  camera_name: 围网11
+  map_xy:
+  - 262
+  - 1047
+- camera_id: 围网110
+  camera_name: 围网110
+  map_xy:
+  - 933
+  - 433
+- camera_id: 围网111
+  camera_name: 围网111
+  map_xy:
+  - 968
+  - 432
+- camera_id: 围网112
+  camera_name: 围网112
+  map_xy:
+  - 1008
+  - 434
+- camera_id: 围网113
+  camera_name: 围网113
+  map_xy:
+  - 1039
+  - 431
+- camera_id: 围网114
+  camera_name: 围网114
+  map_xy:
+  - 1068
+  - 433
+- camera_id: 围网115
+  camera_name: 围网115
+  map_xy:
+  - 1064
+  - 467
+- camera_id: 围网116
+  camera_name: 围网116
+  map_xy:
+  - 1066
+  - 507
+- camera_id: 围网117
+  camera_name: 围网117
+  map_xy:
+  - 1077
+  - 545
+- camera_id: 围网118
+  camera_name: 围网118
+  map_xy:
+  - 1074
+  - 579
+- camera_id: 围网119
+  camera_name: 围网119
+  map_xy:
+  - 1071
+  - 608
+- camera_id: 围网12
+  camera_name: 围网12
+  map_xy:
+  - 227
+  - 1029
+- camera_id: 围网120
+  camera_name: 围网120
+  map_xy:
+  - 1077
+  - 641
+- camera_id: 围网121
+  camera_name: 围网121
+  map_xy:
+  - 1075
+  - 683
+- camera_id: 围网13
+  camera_name: 围网13
+  map_xy:
+  - 245
+  - 989
+- camera_id: 围网14
+  camera_name: 围网14
+  map_xy:
+  - 264
+  - 952
+- camera_id: 围网15
+  camera_name: 围网15
+  map_xy:
+  - 280
+  - 916
+- camera_id: 围网16
+  camera_name: 围网16
+  map_xy:
+  - 303
+  - 883
+- camera_id: 围网17
+  camera_name: 围网17
+  map_xy:
+  - 319
+  - 853
+- camera_id: 围网18
+  camera_name: 围网18
+  map_xy:
+  - 337
+  - 821
+- camera_id: 围网19
+  camera_name: 围网19
+  map_xy:
+  - 356
+  - 785
+- camera_id: 围网2
+  camera_name: 围网2
+  map_xy:
+  - 457
+  - 1182
+- camera_id: 围网20
+  camera_name: 围网20
+  map_xy:
+  - 490
+  - 573
+- camera_id: 围网21
+  camera_name: 围网21
+  map_xy:
+  - 518
+  - 581
+- camera_id: 围网22
+  camera_name: 围网22
+  map_xy:
+  - 547
+  - 591
+- camera_id: 围网23
+  camera_name: 围网23
+  map_xy:
+  - 575
+  - 602
+- camera_id: 围网24
+  camera_name: 围网24
+  map_xy:
+  - 627
+  - 620
+- camera_id: 围网25
+  camera_name: 围网25
+  map_xy:
+  - 664
+  - 633
+- camera_id: 围网26
+  camera_name: 围网26
+  map_xy:
+  - 702
+  - 647
+- camera_id: 围网27
+  camera_name: 围网27
+  map_xy:
+  - 737
+  - 655
+- camera_id: 围网29
+  camera_name: 围网29
+  map_xy:
+  - 628
+  - 944
+- camera_id: 围网3
+  camera_name: 围网3
+  map_xy:
+  - 424
+  - 1175
+- camera_id: 围网4
+  camera_name: 围网4
+  map_xy:
+  - 412
+  - 1189
 - camera_id: 围网41
   camera_name: 围网41
   map_xy:
@@ -104,6 +329,11 @@ cameras:
   map_xy:
   - 702
   - 1376
+- camera_id: 围网5
+  camera_name: 围网5
+  map_xy:
+  - 376
+  - 1173
 - camera_id: 围网50
   camera_name: 围网50
   map_xy:
@@ -139,6 +369,91 @@ cameras:
   map_xy:
   - 527
   - 1240
+- camera_id: 围网6
+  camera_name: 围网6
+  map_xy:
+  - 340
+  - 1157
+- camera_id: 围网7
+  camera_name: 围网7
+  map_xy:
+  - 314
+  - 1145
+- camera_id: 围网8
+  camera_name: 围网8
+  map_xy:
+  - 277
+  - 1129
+- camera_id: 围网9
+  camera_name: 围网9
+  map_xy:
+  - 293
+  - 1099
+- camera_id: 围网91
+  camera_name: 围网91
+  map_xy:
+  - 376
+  - 748
+- camera_id: 围网92
+  camera_name: 围网92
+  map_xy:
+  - 389
+  - 721
+- camera_id: 围网93
+  camera_name: 围网93
+  map_xy:
+  - 406
+  - 685
+- camera_id: 围网94
+  camera_name: 围网94
+  map_xy:
+  - 424
+  - 649
+- camera_id: 围网95
+  camera_name: 围网95
+  map_xy:
+  - 446
+  - 607
+- camera_id: 围网96
+  camera_name: 围网96
+  map_xy:
+  - 466
+  - 567
+- camera_id: 围网97
+  camera_name: 围网97
+  map_xy:
+  - 483
+  - 533
+- camera_id: 围网98
+  camera_name: 围网98
+  map_xy:
+  - 504
+  - 497
+- camera_id: 围网99
+  camera_name: 围网99
+  map_xy:
+  - 540
+  - 506
+- camera_id: 广兴路东
+  camera_name: 广兴路东
+  map_xy:
+  - 482
+  - 1151
+- camera_id: 广兴路西
+  camera_name: 广兴路西
+  map_xy:
+  - 466
+  - 1145
+- camera_id: 查验平台东
+  camera_name: 查验平台东
+  map_xy:
+  - 633
+  - 1054
+- camera_id: 查验平台西
+  camera_name: 查验平台西
+  map_xy:
+  - 612
+  - 1046
 - camera_id: 物流仓库东
   camera_name: 物流仓库东
   map_xy:
@@ -154,23 +469,3 @@ cameras:
   map_xy:
   - 494
   - 1209
-- camera_id: 中央路北
-  camera_name: 中央路北
-  map_xy:
-  - 633
-  - 936
-- camera_id: 中央路南
-  camera_name: 中央路南
-  map_xy:
-  - 626
-  - 948
-- camera_id: 主卡口内Q2
-  camera_name: 主卡口内Q2
-  map_xy:
-  - 505
-  - 1168
-- camera_id: 主卡口外Q1
-  camera_name: 主卡口外Q1
-  map_xy:
-  - 472
-  - 1253
