@@ -101,6 +101,9 @@ def load_overrides(path: str) -> dict:
             if not source or not target:
                 continue
             entry = {}
+            distance = parse_float(row.get("distance_m"))
+            if distance is not None:
+                entry["distance_m"] = distance
             low = parse_float(row.get("min_travel_sec"))
             high = parse_float(row.get("max_travel_sec"))
             if low is not None:
@@ -210,6 +213,20 @@ def main() -> None:
     rows = load_edges(args.edges)
     edges, problems = build_topology(rows, camera_ids, dwell_sec=args.dwell_sec)
     overrides = load_overrides(args.overrides)
+    # 覆盖表里出现、但道路串链没生成的边 -> 强制补上（并排机位、跨路关系等）
+    existing = {(edge["from_camera_id"], edge["to_camera_id"]) for edge in edges}
+    for (source, target), patch in overrides.items():
+        if (source, target) in existing:
+            continue
+        forced = {"from_camera_id": source, "to_camera_id": target}
+        if "distance_m" in patch:
+            forced["distance_m"] = patch["distance_m"]
+        forced["min_travel_sec"] = patch.get("min_travel_sec", MIN_WINDOW_FLOOR_SEC)
+        forced["max_travel_sec"] = patch.get("max_travel_sec", MAX_WINDOW_CEIL_SEC)
+        forced["notes"] = "人工指定：" + str(patch.get("reason", ""))
+        edges.append(forced)
+        existing.add((source, target))
+
     for edge in edges:
         patch = overrides.get((edge["from_camera_id"], edge["to_camera_id"]))
         if patch:

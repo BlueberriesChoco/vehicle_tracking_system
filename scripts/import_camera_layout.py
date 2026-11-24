@@ -89,9 +89,12 @@ def chain_road(
     for index in range(1, len(entries)):
         arc_a, camera_a = entries[index - 1]
         arc_b, camera_b = entries[index]
-        distance = (arc_b - arc_a) * meters_per_pixel
-        if distance <= 0:
+        arc_gap = arc_b - arc_a
+        # 沿路相隔不到 8 px 说明两台机位是"并排"的（如东西两侧各一台），
+        # 它们之间不存在行驶关系，连上会得到 0.1 m 这种荒谬距离
+        if arc_gap < 8.0:
             continue
+        distance = arc_gap * meters_per_pixel
         edges.append({
             "from_camera_id": camera_a["id"],
             "to_camera_id": camera_b["id"],
@@ -128,6 +131,19 @@ def build(layout: dict, meters_per_pixel: float, max_offset_px: float = 60.0) ->
                     "to_camera_id": key[0],
                     "distance_m": edge["distance_m"],
                 })
+    # 落在道路之外的机位（围网等）用「同组最近邻」兜底，否则它们会全部变成孤立点
+    from scripts.infer_topology_from_positions import infer_edges
+    covered = {edge["from_camera_id"] for edge in edges} | {edge["to_camera_id"] for edge in edges}
+    uncovered = [camera for camera in cameras if camera["id"] not in covered]
+    if len(uncovered) > 1:
+        for edge in infer_edges(uncovered):
+            edge["note"] = "道路外就近推断(待复核)"
+            edges.append({
+                "from_camera_id": edge["from_camera_id"],
+                "to_camera_id": edge["to_camera_id"],
+                "distance_m": round(edge["distance_px"] * meters_per_pixel, 1),
+            })
+
     return cameras, edges
 
 

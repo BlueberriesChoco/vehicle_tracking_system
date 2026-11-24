@@ -2,363 +2,363 @@
 version: 1
 generated_by: scripts/build_topology.py
 edges:
+- from_camera_id: 内卡场地西
+  to_camera_id: 内卡口2
+  min_travel_sec: 20
+  max_travel_sec: 1870
+  distance_m: 39.0
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口2
+  to_camera_id: 内卡场地西
+  min_travel_sec: 20
+  max_travel_sec: 1870
+  distance_m: 39.0
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口2
+  to_camera_id: 内卡场地东北
+  min_travel_sec: 20
+  max_travel_sec: 1834
+  distance_m: 19.1
+  notes: 由道路链自动生成
+- from_camera_id: 内卡场地东北
+  to_camera_id: 内卡口2
+  min_travel_sec: 20
+  max_travel_sec: 1834
+  distance_m: 19.1
+  notes: 由道路链自动生成
+- from_camera_id: 内卡场地东北
+  to_camera_id: 内卡口10
+  min_travel_sec: 20
+  max_travel_sec: 1849
+  distance_m: 27.2
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口10
+  to_camera_id: 内卡场地东北
+  min_travel_sec: 20
+  max_travel_sec: 1849
+  distance_m: 27.2
+  notes: 由道路链自动生成
 - from_camera_id: 内卡口10
   to_camera_id: 内卡口11
   min_travel_sec: 20
   max_travel_sec: 1845
-  distance_m: 24.9
-  notes: 同组最近邻；图上 15.2 px，米制待比例尺
+  distance_m: 25.0
+  notes: 由道路链自动生成
 - from_camera_id: 内卡口11
   to_camera_id: 内卡口10
   min_travel_sec: 20
   max_travel_sec: 1845
-  distance_m: 24.9
-  notes: 同组最近邻；图上 15.2 px，米制待比例尺
-- from_camera_id: 内卡口10
-  to_camera_id: 内卡口2
-  min_travel_sec: 20
-  max_travel_sec: 1884
-  distance_m: 46.8
-  notes: 同组最近邻；图上 28.5 px，米制待比例尺
-- from_camera_id: 内卡口2
-  to_camera_id: 内卡口10
-  min_travel_sec: 20
-  max_travel_sec: 1884
-  distance_m: 46.8
-  notes: 同组最近邻；图上 28.5 px，米制待比例尺
-- from_camera_id: 内卡口2
-  to_camera_id: 内卡口4
-  min_travel_sec: 20
-  max_travel_sec: 1889
-  distance_m: 49.7
-  notes: 同组最近邻；图上 30.3 px，米制待比例尺
-- from_camera_id: 内卡口4
-  to_camera_id: 内卡口2
-  min_travel_sec: 20
-  max_travel_sec: 1889
-  distance_m: 49.7
-  notes: 同组最近邻；图上 30.3 px，米制待比例尺
-- from_camera_id: 内卡口4
-  to_camera_id: 内卡口3
-  min_travel_sec: 20
-  max_travel_sec: 1842
-  distance_m: 23.5
-  notes: 同组最近邻；图上 14.3 px，米制待比例尺
-- from_camera_id: 内卡口3
-  to_camera_id: 内卡口4
-  min_travel_sec: 20
-  max_travel_sec: 1842
-  distance_m: 23.5
-  notes: 同组最近邻；图上 14.3 px，米制待比例尺
-- from_camera_id: 围网41
-  to_camera_id: 围网42
-  min_travel_sec: 20
-  max_travel_sec: 1912
-  distance_m: 62.3
-  notes: 同组最近邻；图上 38.0 px，米制待比例尺
-- from_camera_id: 围网42
+  distance_m: 25.0
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口11
   to_camera_id: 围网41
-  min_travel_sec: 20
-  max_travel_sec: 1912
-  distance_m: 62.3
-  notes: 同组最近邻；图上 38.0 px，米制待比例尺
-- from_camera_id: 围网42
-  to_camera_id: 围网43
-  min_travel_sec: 20
-  max_travel_sec: 1921
-  distance_m: 67.1
-  notes: 同组最近邻；图上 40.9 px，米制待比例尺
-- from_camera_id: 围网43
-  to_camera_id: 围网42
-  min_travel_sec: 20
-  max_travel_sec: 1921
-  distance_m: 67.1
-  notes: 同组最近邻；图上 40.9 px，米制待比例尺
-- from_camera_id: 围网43
-  to_camera_id: 围网44
-  min_travel_sec: 20
-  max_travel_sec: 1934
-  distance_m: 74.2
-  notes: 同组最近邻；图上 45.2 px，米制待比例尺
-- from_camera_id: 围网44
-  to_camera_id: 围网43
-  min_travel_sec: 20
-  max_travel_sec: 1934
-  distance_m: 74.2
-  notes: 同组最近邻；图上 45.2 px，米制待比例尺
-- from_camera_id: 围网44
-  to_camera_id: 围网45
-  min_travel_sec: 20
-  max_travel_sec: 1925
-  distance_m: 69.7
-  notes: 同组最近邻；图上 42.5 px，米制待比例尺
-- from_camera_id: 围网45
-  to_camera_id: 围网44
-  min_travel_sec: 20
-  max_travel_sec: 1925
-  distance_m: 69.7
-  notes: 同组最近邻；图上 42.5 px，米制待比例尺
-- from_camera_id: 围网45
-  to_camera_id: 围网46
-  min_travel_sec: 20
-  max_travel_sec: 1946
-  distance_m: 81.0
-  notes: 同组最近邻；图上 49.4 px，米制待比例尺
-- from_camera_id: 围网46
-  to_camera_id: 围网45
-  min_travel_sec: 20
-  max_travel_sec: 1946
-  distance_m: 81.0
-  notes: 同组最近邻；图上 49.4 px，米制待比例尺
-- from_camera_id: 围网46
-  to_camera_id: 围网47
-  min_travel_sec: 20
-  max_travel_sec: 1911
-  distance_m: 61.9
-  notes: 同组最近邻；图上 37.7 px，米制待比例尺
-- from_camera_id: 围网47
-  to_camera_id: 围网46
-  min_travel_sec: 20
-  max_travel_sec: 1911
-  distance_m: 61.9
-  notes: 同组最近邻；图上 37.7 px，米制待比例尺
-- from_camera_id: 围网47
-  to_camera_id: 围网48
-  min_travel_sec: 20
-  max_travel_sec: 1898
-  distance_m: 54.3
-  notes: 同组最近邻；图上 33.1 px，米制待比例尺
-- from_camera_id: 围网48
-  to_camera_id: 围网47
-  min_travel_sec: 20
-  max_travel_sec: 1898
-  distance_m: 54.3
-  notes: 同组最近邻；图上 33.1 px，米制待比例尺
-- from_camera_id: 围网48
-  to_camera_id: 围网49
-  min_travel_sec: 20
-  max_travel_sec: 1867
-  distance_m: 37.1
-  notes: 同组最近邻；图上 22.6 px，米制待比例尺
-- from_camera_id: 围网49
-  to_camera_id: 围网48
-  min_travel_sec: 20
-  max_travel_sec: 1867
-  distance_m: 37.1
-  notes: 同组最近邻；图上 22.6 px，米制待比例尺
-- from_camera_id: 围网49
-  to_camera_id: 围网50
-  min_travel_sec: 20
-  max_travel_sec: 1898
-  distance_m: 54.3
-  notes: 同组最近邻；图上 33.1 px，米制待比例尺
-- from_camera_id: 围网50
-  to_camera_id: 围网49
-  min_travel_sec: 20
-  max_travel_sec: 1898
-  distance_m: 54.3
-  notes: 同组最近邻；图上 33.1 px，米制待比例尺
-- from_camera_id: 围网50
-  to_camera_id: 围网51
-  min_travel_sec: 20
-  max_travel_sec: 1909
-  distance_m: 60.4
-  notes: 同组最近邻；图上 36.8 px，米制待比例尺
-- from_camera_id: 围网51
-  to_camera_id: 围网50
-  min_travel_sec: 20
-  max_travel_sec: 1909
-  distance_m: 60.4
-  notes: 同组最近邻；图上 36.8 px，米制待比例尺
-- from_camera_id: 围网51
-  to_camera_id: 围网52
-  min_travel_sec: 20
-  max_travel_sec: 1889
-  distance_m: 49.2
-  notes: 同组最近邻；图上 30.0 px，米制待比例尺
-- from_camera_id: 围网52
-  to_camera_id: 围网51
-  min_travel_sec: 20
-  max_travel_sec: 1889
-  distance_m: 49.2
-  notes: 同组最近邻；图上 30.0 px，米制待比例尺
-- from_camera_id: 围网52
-  to_camera_id: 围网53
-  min_travel_sec: 20
-  max_travel_sec: 1911
-  distance_m: 61.9
-  notes: 同组最近邻；图上 37.7 px，米制待比例尺
-- from_camera_id: 围网53
-  to_camera_id: 围网52
-  min_travel_sec: 20
-  max_travel_sec: 1911
-  distance_m: 61.9
-  notes: 同组最近邻；图上 37.7 px，米制待比例尺
-- from_camera_id: 围网53
-  to_camera_id: 围网54
-  min_travel_sec: 20
-  max_travel_sec: 1903
-  distance_m: 57.3
-  notes: 同组最近邻；图上 34.9 px，米制待比例尺
-- from_camera_id: 围网54
-  to_camera_id: 围网53
-  min_travel_sec: 20
-  max_travel_sec: 1903
-  distance_m: 57.3
-  notes: 同组最近邻；图上 34.9 px，米制待比例尺
-- from_camera_id: 围网54
-  to_camera_id: 围网55
-  min_travel_sec: 20
-  max_travel_sec: 1900
-  distance_m: 55.8
-  notes: 同组最近邻；图上 34.0 px，米制待比例尺
-- from_camera_id: 围网55
-  to_camera_id: 围网54
-  min_travel_sec: 20
-  max_travel_sec: 1900
-  distance_m: 55.8
-  notes: 同组最近邻；图上 34.0 px，米制待比例尺
-- from_camera_id: 围网55
-  to_camera_id: 围网56
-  min_travel_sec: 20
-  max_travel_sec: 1955
-  distance_m: 86.3
-  notes: 同组最近邻；图上 52.6 px，米制待比例尺
-- from_camera_id: 围网56
-  to_camera_id: 围网55
-  min_travel_sec: 20
-  max_travel_sec: 1955
-  distance_m: 86.3
-  notes: 同组最近邻；图上 52.6 px，米制待比例尺
-- from_camera_id: 查验平台东
-  to_camera_id: 查验平台西
-  min_travel_sec: 20
-  max_travel_sec: 1866
-  distance_m: 36.9
-  notes: 跨组近邻(待复核)；图上 22.5 px，米制待比例尺
-- from_camera_id: 查验平台西
-  to_camera_id: 查验平台东
-  min_travel_sec: 20
-  max_travel_sec: 1866
-  distance_m: 36.9
-  notes: 跨组近邻(待复核)；图上 22.5 px，米制待比例尺
-- from_camera_id: 广兴路东
-  to_camera_id: 广兴路西
-  min_travel_sec: 20
-  max_travel_sec: 1851
-  distance_m: 28.1
-  notes: 跨组近邻(待复核)；图上 17.1 px，米制待比例尺
+  min_travel_sec: 53
+  max_travel_sec: 2458
+  distance_m: 365.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网41
+  to_camera_id: 内卡口11
+  min_travel_sec: 53
+  max_travel_sec: 2458
+  distance_m: 365.4
+  notes: 由道路链自动生成
 - from_camera_id: 广兴路西
   to_camera_id: 广兴路东
   min_travel_sec: 20
-  max_travel_sec: 1851
-  distance_m: 28.1
-  notes: 跨组近邻(待复核)；图上 17.1 px，米制待比例尺
+  max_travel_sec: 1850
+  distance_m: 28.0
+  notes: 由道路链自动生成
 - from_camera_id: 广兴路东
-  to_camera_id: 主卡口内Q2
+  to_camera_id: 广兴路西
   min_travel_sec: 20
-  max_travel_sec: 1884
-  distance_m: 46.9
-  notes: 跨组近邻(待复核)；图上 28.6 px，米制待比例尺
-- from_camera_id: 主卡口内Q2
-  to_camera_id: 广兴路东
-  min_travel_sec: 20
-  max_travel_sec: 1884
-  distance_m: 46.9
-  notes: 跨组近邻(待复核)；图上 28.6 px，米制待比例尺
-- from_camera_id: 卡口非机动车道
-  to_camera_id: 主卡口内Q2
-  min_travel_sec: 20
-  max_travel_sec: 1845
-  distance_m: 25.1
-  notes: 跨组近邻(待复核)；图上 15.3 px，米制待比例尺
-- from_camera_id: 主卡口内Q2
-  to_camera_id: 卡口非机动车道
-  min_travel_sec: 20
-  max_travel_sec: 1845
-  distance_m: 25.1
-  notes: 跨组近邻(待复核)；图上 15.3 px，米制待比例尺
-- from_camera_id: 内卡场地东北
-  to_camera_id: 内卡口10
-  min_travel_sec: 20
-  max_travel_sec: 1874
-  distance_m: 41.2
-  notes: 跨组近邻(待复核)；图上 25.1 px，米制待比例尺
-- from_camera_id: 内卡口10
-  to_camera_id: 内卡场地东北
-  min_travel_sec: 20
-  max_travel_sec: 1874
-  distance_m: 41.2
-  notes: 跨组近邻(待复核)；图上 25.1 px，米制待比例尺
-- from_camera_id: 内卡场地东北
-  to_camera_id: 内卡口2
-  min_travel_sec: 20
-  max_travel_sec: 1857
-  distance_m: 31.8
-  notes: 跨组近邻(待复核)；图上 19.4 px，米制待比例尺
-- from_camera_id: 内卡口2
-  to_camera_id: 内卡场地东北
-  min_travel_sec: 20
-  max_travel_sec: 1857
-  distance_m: 31.8
-  notes: 跨组近邻(待复核)；图上 19.4 px，米制待比例尺
-- from_camera_id: 内卡场地西
-  to_camera_id: 内卡口2
-  min_travel_sec: 20
-  max_travel_sec: 1870
-  distance_m: 39.0
-  notes: 跨组近邻(待复核)；图上 23.8 px，米制待比例尺
-- from_camera_id: 内卡口2
-  to_camera_id: 内卡场地西
-  min_travel_sec: 20
-  max_travel_sec: 1870
-  distance_m: 39.0
-  notes: 跨组近邻(待复核)；图上 23.8 px，米制待比例尺
-- from_camera_id: 内卡场地西
-  to_camera_id: 内卡口3
-  min_travel_sec: 20
-  max_travel_sec: 1887
-  distance_m: 48.4
-  notes: 跨组近邻(待复核)；图上 29.5 px，米制待比例尺
-- from_camera_id: 内卡口3
-  to_camera_id: 内卡场地西
-  min_travel_sec: 20
-  max_travel_sec: 1887
-  distance_m: 48.4
-  notes: 跨组近邻(待复核)；图上 29.5 px，米制待比例尺
-- from_camera_id: 内卡场地西
-  to_camera_id: 内卡口4
-  min_travel_sec: 20
-  max_travel_sec: 1845
-  distance_m: 25.1
-  notes: 跨组近邻(待复核)；图上 15.3 px，米制待比例尺
-- from_camera_id: 内卡口4
-  to_camera_id: 内卡场地西
-  min_travel_sec: 20
-  max_travel_sec: 1845
-  distance_m: 25.1
-  notes: 跨组近邻(待复核)；图上 15.3 px，米制待比例尺
-- from_camera_id: admin_out
-  to_camera_id: admin_in
-  min_travel_sec: 20
-  max_travel_sec: 10800
-  distance_m: 32.3
-  notes: 人工覆盖：同上（反向）
-- from_camera_id: admin_in
+  max_travel_sec: 1850
+  distance_m: 28.0
+  notes: 由道路链自动生成
+- from_camera_id: 广兴路东
   to_camera_id: admin_out
   min_travel_sec: 20
-  max_travel_sec: 10800
+  max_travel_sec: 1844
+  distance_m: 24.6
+  notes: 由道路链自动生成
+- from_camera_id: admin_out
+  to_camera_id: 广兴路东
+  min_travel_sec: 20
+  max_travel_sec: 1844
+  distance_m: 24.6
+  notes: 由道路链自动生成
+- from_camera_id: admin_out
+  to_camera_id: 主卡口内Q2
+  min_travel_sec: 20
+  max_travel_sec: 1838
+  distance_m: 21.2
+  notes: 由道路链自动生成
+- from_camera_id: 主卡口内Q2
+  to_camera_id: admin_out
+  min_travel_sec: 20
+  max_travel_sec: 1838
+  distance_m: 21.2
+  notes: 由道路链自动生成
+- from_camera_id: 卡口非机动车道
+  to_camera_id: 物流仓库东
+  min_travel_sec: 31
+  max_travel_sec: 2185
+  distance_m: 214.0
+  notes: 由道路链自动生成
+- from_camera_id: 物流仓库东
+  to_camera_id: 卡口非机动车道
+  min_travel_sec: 31
+  max_travel_sec: 2185
+  distance_m: 214.0
+  notes: 由道路链自动生成
+- from_camera_id: 物流仓库东
+  to_camera_id: 围网45
+  min_travel_sec: 39
+  max_travel_sec: 2284
+  distance_m: 269.0
+  notes: 由道路链自动生成
+- from_camera_id: 围网45
+  to_camera_id: 物流仓库东
+  min_travel_sec: 39
+  max_travel_sec: 2284
+  distance_m: 269.0
+  notes: 由道路链自动生成
+- from_camera_id: admin_out
+  to_camera_id: 卡口非机动车道
+  min_travel_sec: 20
+  max_travel_sec: 1896
+  distance_m: 53.6
+  notes: 由道路链自动生成
+- from_camera_id: 卡口非机动车道
+  to_camera_id: admin_out
+  min_travel_sec: 20
+  max_travel_sec: 1896
+  distance_m: 53.6
+  notes: 由道路链自动生成
+- from_camera_id: 广兴路东
+  to_camera_id: 查验平台西
+  min_travel_sec: 36
+  max_travel_sec: 2253
+  distance_m: 251.7
+  notes: 由道路链自动生成
+- from_camera_id: 查验平台西
+  to_camera_id: 广兴路东
+  min_travel_sec: 36
+  max_travel_sec: 2253
+  distance_m: 251.7
+  notes: 由道路链自动生成
+- from_camera_id: 查验平台西
+  to_camera_id: 内卡口3
+  min_travel_sec: 20
+  max_travel_sec: 1858
   distance_m: 32.3
-  notes: 人工覆盖：行政通道进→出；实测有车在区内办事 1-3 小时，自动推算的 31 分钟会把真实链路剪掉
-- from_camera_id: 中央路北
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口3
+  to_camera_id: 查验平台西
+  min_travel_sec: 20
+  max_travel_sec: 1858
+  distance_m: 32.3
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口3
+  to_camera_id: 内卡口4
+  min_travel_sec: 20
+  max_travel_sec: 1842
+  distance_m: 23.5
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口4
+  to_camera_id: 内卡口3
+  min_travel_sec: 20
+  max_travel_sec: 1842
+  distance_m: 23.5
+  notes: 由道路链自动生成
+- from_camera_id: 内卡场地东北
+  to_camera_id: 内卡场地西
+  min_travel_sec: 20
+  max_travel_sec: 1837
+  distance_m: 20.8
+  notes: 由道路链自动生成
+- from_camera_id: 内卡场地西
+  to_camera_id: 内卡场地东北
+  min_travel_sec: 20
+  max_travel_sec: 1837
+  distance_m: 20.8
+  notes: 由道路链自动生成
+- from_camera_id: 内卡口2
   to_camera_id: 中央路南
   min_travel_sec: 20
-  max_travel_sec: 1841
-  distance_m: 22.8
-  notes: 跨组近邻(待复核)；图上 13.9 px，米制待比例尺
+  max_travel_sec: 1923
+  distance_m: 68.6
+  notes: 由道路链自动生成
+- from_camera_id: 中央路南
+  to_camera_id: 内卡口2
+  min_travel_sec: 20
+  max_travel_sec: 1923
+  distance_m: 68.6
+  notes: 由道路链自动生成
 - from_camera_id: 中央路南
   to_camera_id: 中央路北
   min_travel_sec: 20
   max_travel_sec: 1841
   distance_m: 22.8
-  notes: 跨组近邻(待复核)；图上 13.9 px，米制待比例尺
+  notes: 由道路链自动生成
+- from_camera_id: 中央路北
+  to_camera_id: 中央路南
+  min_travel_sec: 20
+  max_travel_sec: 1841
+  distance_m: 22.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网42
+  to_camera_id: 围网43
+  min_travel_sec: 20
+  max_travel_sec: 1921
+  distance_m: 67.1
+  notes: 由道路链自动生成
+- from_camera_id: 围网43
+  to_camera_id: 围网42
+  min_travel_sec: 20
+  max_travel_sec: 1921
+  distance_m: 67.1
+  notes: 由道路链自动生成
+- from_camera_id: 围网43
+  to_camera_id: 围网44
+  min_travel_sec: 20
+  max_travel_sec: 1934
+  distance_m: 74.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网44
+  to_camera_id: 围网43
+  min_travel_sec: 20
+  max_travel_sec: 1934
+  distance_m: 74.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网46
+  to_camera_id: 围网47
+  min_travel_sec: 20
+  max_travel_sec: 1911
+  distance_m: 61.9
+  notes: 由道路链自动生成
+- from_camera_id: 围网47
+  to_camera_id: 围网46
+  min_travel_sec: 20
+  max_travel_sec: 1911
+  distance_m: 61.9
+  notes: 由道路链自动生成
+- from_camera_id: 围网47
+  to_camera_id: 围网48
+  min_travel_sec: 20
+  max_travel_sec: 1898
+  distance_m: 54.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网48
+  to_camera_id: 围网47
+  min_travel_sec: 20
+  max_travel_sec: 1898
+  distance_m: 54.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网48
+  to_camera_id: 围网49
+  min_travel_sec: 20
+  max_travel_sec: 1867
+  distance_m: 37.1
+  notes: 由道路链自动生成
+- from_camera_id: 围网49
+  to_camera_id: 围网48
+  min_travel_sec: 20
+  max_travel_sec: 1867
+  distance_m: 37.1
+  notes: 由道路链自动生成
+- from_camera_id: 围网49
+  to_camera_id: 围网50
+  min_travel_sec: 20
+  max_travel_sec: 1898
+  distance_m: 54.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网50
+  to_camera_id: 围网49
+  min_travel_sec: 20
+  max_travel_sec: 1898
+  distance_m: 54.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网50
+  to_camera_id: 围网51
+  min_travel_sec: 20
+  max_travel_sec: 1909
+  distance_m: 60.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网51
+  to_camera_id: 围网50
+  min_travel_sec: 20
+  max_travel_sec: 1909
+  distance_m: 60.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网51
+  to_camera_id: 围网52
+  min_travel_sec: 20
+  max_travel_sec: 1889
+  distance_m: 49.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网52
+  to_camera_id: 围网51
+  min_travel_sec: 20
+  max_travel_sec: 1889
+  distance_m: 49.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网52
+  to_camera_id: 围网53
+  min_travel_sec: 20
+  max_travel_sec: 1911
+  distance_m: 61.9
+  notes: 由道路链自动生成
+- from_camera_id: 围网53
+  to_camera_id: 围网52
+  min_travel_sec: 20
+  max_travel_sec: 1911
+  distance_m: 61.9
+  notes: 由道路链自动生成
+- from_camera_id: 围网53
+  to_camera_id: 围网54
+  min_travel_sec: 20
+  max_travel_sec: 1903
+  distance_m: 57.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网54
+  to_camera_id: 围网53
+  min_travel_sec: 20
+  max_travel_sec: 1903
+  distance_m: 57.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网54
+  to_camera_id: 围网55
+  min_travel_sec: 20
+  max_travel_sec: 1900
+  distance_m: 55.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网55
+  to_camera_id: 围网54
+  min_travel_sec: 20
+  max_travel_sec: 1900
+  distance_m: 55.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网55
+  to_camera_id: 围网56
+  min_travel_sec: 20
+  max_travel_sec: 1955
+  distance_m: 86.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网56
+  to_camera_id: 围网55
+  min_travel_sec: 20
+  max_travel_sec: 1955
+  distance_m: 86.3
+  notes: 由道路链自动生成
+- from_camera_id: admin_in
+  to_camera_id: admin_out
+  distance_m: 32.3
+  min_travel_sec: 20
+  max_travel_sec: 10800
+  notes: 人工覆盖：行政通道进→出：两台机位同一门架并排，道路串链会当成并排剪掉；实测有车停留 1-3 小时
+- from_camera_id: admin_out
+  to_camera_id: admin_in
+  distance_m: 32.3
+  min_travel_sec: 20
+  max_travel_sec: 10800
+  notes: 人工覆盖：同上（反向）

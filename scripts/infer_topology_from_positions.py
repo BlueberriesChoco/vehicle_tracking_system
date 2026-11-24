@@ -95,7 +95,10 @@ def infer_edges(
                     if distance <= same_group_threshold_px and (best is None or distance < best[0]):
                         best = (distance, anchor, camera)
             if best is None:
-                break
+                # 遇到断点：从剩余机位里另起一条链，而不是整体停止
+                connected = {remaining[0]["id"]}
+                remaining = remaining[1:]
+                continue
             distance, anchor, camera = best
             add(anchor, camera, distance, "同组最近邻")
             connected.add(camera["id"])
