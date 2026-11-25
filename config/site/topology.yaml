@@ -878,6 +878,18 @@ edges:
   max_travel_sec: 1884
   distance_m: 46.9
   notes: 由道路链自动生成
+- from_camera_id: 围网40
+  to_camera_id: 围网41
+  min_travel_sec: 20
+  max_travel_sec: 1902
+  distance_m: 56.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网41
+  to_camera_id: 围网40
+  min_travel_sec: 20
+  max_travel_sec: 1902
+  distance_m: 56.4
+  notes: 由道路链自动生成
 - from_camera_id: 围网41
   to_camera_id: 围网42
   min_travel_sec: 20
@@ -1201,4 +1213,40 @@ edges:
   distance_m: 128.0
   min_travel_sec: 20
   max_travel_sec: 3600
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 围网40
+  to_camera_id: 围网58
+  distance_m: 41.5
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：围网40是41-47段与58-68段的交界，同组串链每点只连一个邻居，需显式闭环
+- from_camera_id: 围网58
+  to_camera_id: 围网40
+  distance_m: 41.5
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 围网3
+  to_camera_id: 围网4
+  distance_m: 30.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：围网3与4物理相邻但串链断开，显式补边
+- from_camera_id: 围网4
+  to_camera_id: 围网3
+  distance_m: 30.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 围网Q7云台
+  to_camera_id: 围网105
+  distance_m: 39.0
+  min_travel_sec: 20
+  max_travel_sec: 1800
+  notes: 人工覆盖：云台与相邻固定机位补边（云台可靠性较低，窗口不宜过宽）
+- from_camera_id: 围网105
+  to_camera_id: 围网Q7云台
+  distance_m: 39.0
+  min_travel_sec: 20
+  max_travel_sec: 1800
   notes: 人工覆盖：同上（反向）

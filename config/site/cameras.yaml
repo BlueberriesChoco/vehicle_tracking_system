@@ -274,6 +274,11 @@ cameras:
   map_xy:
   - 412
   - 1189
+- camera_id: 围网40
+  camera_name: 围网40
+  map_xy:
+  - 883
+  - 1108
 - camera_id: 围网41
   camera_name: 围网41
   map_xy:
