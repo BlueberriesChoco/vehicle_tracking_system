@@ -1,0 +1,25 @@
+# 精确版本锁（2026-11-25 于开发机 pip list 导出）
+#
+# 刻意不含 torch / torchvision：
+#   它们必须按显卡选构建，不能跨机器锁定。
+#   - RTX 3060 / 2080 等 sm_86： torch 2.5.1 + cu118
+#   - RTX 5080 / 5090（sm_120）: torch >= 2.7 + cu128（cu118/cu126 轮子没有 sm_120 内核）
+#
+# 安装顺序：
+#   1) 先装 torch（按显卡选 index-url）
+#   2) 再装本文件（pip 会跳过 torch 相关依赖）
+#
+numpy==2.4.6
+scipy==1.17.1
+opencv-python==4.13.0.92
+ultralytics==8.4.58
+PyYAML==6.0.3
+python-docx==1.2.0
+matplotlib==3.10.9
+psutil==7.2.2
+pytest==9.0.3
+pillow==11.1.0
+pandas==3.0.3
+# 可选后端：缺了会自动回退，但涉及的能力会退化
+easyocr==1.7.2
+onnxruntime==1.32.0
