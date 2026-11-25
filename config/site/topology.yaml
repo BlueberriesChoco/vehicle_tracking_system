@@ -242,29 +242,41 @@ edges:
   max_travel_sec: 1923
   distance_m: 68.6
   notes: 由道路链自动生成
-- from_camera_id: 围网29
+- from_camera_id: 中央路南
   to_camera_id: 中央路北
   min_travel_sec: 20
-  max_travel_sec: 1828
-  distance_m: 15.4
+  max_travel_sec: 1841
+  distance_m: 22.8
+  notes: 由道路链自动生成
+- from_camera_id: 中央路北
+  to_camera_id: 中央路南
+  min_travel_sec: 20
+  max_travel_sec: 1841
+  distance_m: 22.8
   notes: 由道路链自动生成
 - from_camera_id: 中央路北
   to_camera_id: 围网29
   min_travel_sec: 20
-  max_travel_sec: 1828
-  distance_m: 15.4
+  max_travel_sec: 1890
+  distance_m: 50.0
   notes: 由道路链自动生成
-- from_camera_id: 中央路北
+- from_camera_id: 围网29
+  to_camera_id: 中央路北
+  min_travel_sec: 20
+  max_travel_sec: 1890
+  distance_m: 50.0
+  notes: 由道路链自动生成
+- from_camera_id: 围网29
   to_camera_id: 围网26
-  min_travel_sec: 71
-  max_travel_sec: 2691
-  distance_m: 495.1
+  min_travel_sec: 64
+  max_travel_sec: 2601
+  distance_m: 445.1
   notes: 由道路链自动生成
 - from_camera_id: 围网26
-  to_camera_id: 中央路北
-  min_travel_sec: 71
-  max_travel_sec: 2691
-  distance_m: 495.1
+  to_camera_id: 围网29
+  min_travel_sec: 64
+  max_travel_sec: 2601
+  distance_m: 445.1
   notes: 由道路链自动生成
 - from_camera_id: 围网27
   to_camera_id: 围网107
@@ -890,6 +902,18 @@ edges:
   max_travel_sec: 1955
   distance_m: 86.3
   notes: 由道路链自动生成
+- from_camera_id: 围网56
+  to_camera_id: 围网57
+  min_travel_sec: 20
+  max_travel_sec: 2031
+  distance_m: 128.5
+  notes: 由道路链自动生成
+- from_camera_id: 围网57
+  to_camera_id: 围网56
+  min_travel_sec: 20
+  max_travel_sec: 2031
+  distance_m: 128.5
+  notes: 由道路链自动生成
 - from_camera_id: admin_in
   to_camera_id: admin_out
   distance_m: 32.3
@@ -901,4 +925,16 @@ edges:
   distance_m: 32.3
   min_travel_sec: 20
   max_travel_sec: 10800
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 围网57
+  to_camera_id: admin_in
+  distance_m: 66.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：围网57 是行政通道入口的车尾视角，与 admin_in（车头）同一门架
+- from_camera_id: admin_in
+  to_camera_id: 围网57
+  distance_m: 66.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
   notes: 人工覆盖：同上（反向）

@@ -1,3 +1,6 @@
 from_camera_id,to_camera_id,distance_m,min_travel_sec,max_travel_sec,reason
 admin_in,admin_out,32.3,20,10800,行政通道进→出：两台机位同一门架并排，道路串链会当成并排剪掉；实测有车停留 1-3 小时
 admin_out,admin_in,32.3,20,10800,同上（反向）
+围网57,admin_in,66.0,20,3600,围网57 是行政通道入口的车尾视角，与 admin_in（车头）同一门架
+
+admin_in,围网57,66.0,20,3600,同上（反向）

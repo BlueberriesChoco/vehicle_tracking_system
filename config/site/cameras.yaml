@@ -262,8 +262,8 @@ cameras:
 - camera_id: 围网29
   camera_name: 围网29
   map_xy:
-  - 628
-  - 944
+  - 649
+  - 910
 - camera_id: 围网3
   camera_name: 围网3
   map_xy:
@@ -359,6 +359,11 @@ cameras:
   map_xy:
   - 527
   - 1240
+- camera_id: 围网57
+  camera_name: 围网57
+  map_xy:
+  - 494
+  - 1169
 - camera_id: 围网6
   camera_name: 围网6
   map_xy:

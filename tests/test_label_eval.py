@@ -32,10 +32,12 @@ def _read_vectors(limit):
 
 
 def _run(vectors, labels, output):
+    # 子进程会输出中文；不指定编码时 Windows 默认按 GBK 解码，会抛 UnicodeDecodeError
     return subprocess.run(
         [sys.executable, "scripts/eval_with_labels.py",
          "--vectors", str(vectors), "--labels", str(labels), "--output", str(output)],
-        cwd=str(ROOT), capture_output=True, text=True, timeout=300,
+        cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
+        errors="replace", timeout=300,
     )
 
 
