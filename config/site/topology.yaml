@@ -75,16 +75,16 @@ edges:
   distance_m: 25.0
   notes: 由道路链自动生成
 - from_camera_id: 内卡口11
-  to_camera_id: 围网41
-  min_travel_sec: 53
-  max_travel_sec: 2458
-  distance_m: 365.4
+  to_camera_id: 围网58
+  min_travel_sec: 52
+  max_travel_sec: 2455
+  distance_m: 363.8
   notes: 由道路链自动生成
-- from_camera_id: 围网41
+- from_camera_id: 围网58
   to_camera_id: 内卡口11
-  min_travel_sec: 53
-  max_travel_sec: 2458
-  distance_m: 365.4
+  min_travel_sec: 52
+  max_travel_sec: 2455
+  distance_m: 363.8
   notes: 由道路链自动生成
 - from_camera_id: 围网13
   to_camera_id: 围网3
@@ -698,6 +698,114 @@ edges:
   max_travel_sec: 1924
   distance_m: 68.9
   notes: 由道路链自动生成
+- from_camera_id: 围网121
+  to_camera_id: 围网68
+  min_travel_sec: 20
+  max_travel_sec: 1905
+  distance_m: 58.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网68
+  to_camera_id: 围网121
+  min_travel_sec: 20
+  max_travel_sec: 1905
+  distance_m: 58.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网68
+  to_camera_id: 围网67
+  min_travel_sec: 20
+  max_travel_sec: 1915
+  distance_m: 63.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网67
+  to_camera_id: 围网68
+  min_travel_sec: 20
+  max_travel_sec: 1915
+  distance_m: 63.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网67
+  to_camera_id: 围网66
+  min_travel_sec: 20
+  max_travel_sec: 1935
+  distance_m: 75.0
+  notes: 由道路链自动生成
+- from_camera_id: 围网66
+  to_camera_id: 围网67
+  min_travel_sec: 20
+  max_travel_sec: 1935
+  distance_m: 75.0
+  notes: 由道路链自动生成
+- from_camera_id: 围网66
+  to_camera_id: 围网65
+  min_travel_sec: 20
+  max_travel_sec: 1895
+  distance_m: 52.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网65
+  to_camera_id: 围网66
+  min_travel_sec: 20
+  max_travel_sec: 1895
+  distance_m: 52.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网65
+  to_camera_id: 围网64
+  min_travel_sec: 20
+  max_travel_sec: 1928
+  distance_m: 71.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网64
+  to_camera_id: 围网65
+  min_travel_sec: 20
+  max_travel_sec: 1928
+  distance_m: 71.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网64
+  to_camera_id: 围网63
+  min_travel_sec: 20
+  max_travel_sec: 1920
+  distance_m: 66.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网63
+  to_camera_id: 围网64
+  min_travel_sec: 20
+  max_travel_sec: 1920
+  distance_m: 66.4
+  notes: 由道路链自动生成
+- from_camera_id: 围网63
+  to_camera_id: 围网62
+  min_travel_sec: 20
+  max_travel_sec: 1940
+  distance_m: 77.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网62
+  to_camera_id: 围网63
+  min_travel_sec: 20
+  max_travel_sec: 1940
+  distance_m: 77.8
+  notes: 由道路链自动生成
+- from_camera_id: 围网62
+  to_camera_id: 围网61
+  min_travel_sec: 20
+  max_travel_sec: 1916
+  distance_m: 64.6
+  notes: 由道路链自动生成
+- from_camera_id: 围网61
+  to_camera_id: 围网62
+  min_travel_sec: 20
+  max_travel_sec: 1916
+  distance_m: 64.6
+  notes: 由道路链自动生成
+- from_camera_id: 围网61
+  to_camera_id: 围网60
+  min_travel_sec: 20
+  max_travel_sec: 1926
+  distance_m: 70.1
+  notes: 由道路链自动生成
+- from_camera_id: 围网60
+  to_camera_id: 围网61
+  min_travel_sec: 20
+  max_travel_sec: 1926
+  distance_m: 70.1
+  notes: 由道路链自动生成
 - from_camera_id: 围网14
   to_camera_id: 围网15
   min_travel_sec: 20
@@ -757,6 +865,18 @@ edges:
   min_travel_sec: 20
   max_travel_sec: 1884
   distance_m: 46.9
+  notes: 由道路链自动生成
+- from_camera_id: 围网41
+  to_camera_id: 围网42
+  min_travel_sec: 20
+  max_travel_sec: 1912
+  distance_m: 62.3
+  notes: 由道路链自动生成
+- from_camera_id: 围网42
+  to_camera_id: 围网41
+  min_travel_sec: 20
+  max_travel_sec: 1912
+  distance_m: 62.3
   notes: 由道路链自动生成
 - from_camera_id: 围网42
   to_camera_id: 围网43
@@ -935,6 +1055,18 @@ edges:
 - from_camera_id: admin_in
   to_camera_id: 围网57
   distance_m: 66.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 围网58
+  to_camera_id: 围网60
+  distance_m: 128.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：围网59损坏剔除；58与60在富民港路上物理连续
+- from_camera_id: 围网60
+  to_camera_id: 围网58
+  distance_m: 128.0
   min_travel_sec: 20
   max_travel_sec: 3600
   notes: 人工覆盖：同上（反向）
