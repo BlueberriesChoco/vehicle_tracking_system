@@ -469,6 +469,46 @@ cameras:
   map_xy:
   - 540
   - 506
+- camera_id: 围网Q10云台
+  camera_name: 围网Q10云台
+  map_xy:
+  - 507
+  - 517
+- camera_id: 围网Q11
+  camera_name: 围网Q11
+  map_xy:
+  - 441
+  - 631
+- camera_id: 围网Q3云台
+  camera_name: 围网Q3云台
+  map_xy:
+  - 1048
+  - 451
+- camera_id: 围网Q5云台
+  camera_name: 围网Q5云台
+  map_xy:
+  - 933
+  - 448
+- camera_id: 围网Q6云台
+  camera_name: 围网Q6云台
+  map_xy:
+  - 788
+  - 450
+- camera_id: 围网Q7云台
+  camera_name: 围网Q7云台
+  map_xy:
+  - 745
+  - 450
+- camera_id: 围网Q8云台
+  camera_name: 围网Q8云台
+  map_xy:
+  - 660
+  - 452
+- camera_id: 围网Q9云台
+  camera_name: 围网Q9云台
+  map_xy:
+  - 618
+  - 535
 - camera_id: 广兴路东
   camera_name: 广兴路东
   map_xy:
