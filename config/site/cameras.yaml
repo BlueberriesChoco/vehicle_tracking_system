@@ -168,7 +168,7 @@ cameras:
   camera_name: 围网12
   map_xy:
   - 227
-  - 1029
+  - 1028
 - camera_id: 围网120
   camera_name: 围网120
   map_xy:
@@ -182,8 +182,8 @@ cameras:
 - camera_id: 围网13
   camera_name: 围网13
   map_xy:
-  - 245
-  - 989
+  - 244
+  - 990
 - camera_id: 围网14
   camera_name: 围网14
   map_xy:

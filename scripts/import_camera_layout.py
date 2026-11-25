@@ -149,8 +149,17 @@ def build(layout: dict, meters_per_pixel: float, max_offset_px: float = 60.0) ->
     from scripts.infer_topology_from_positions import infer_edges
     covered = {edge["from_camera_id"] for edge in edges} | {edge["to_camera_id"] for edge in edges}
     uncovered = [camera for camera in cameras if camera["id"] not in covered]
-    if len(uncovered) > 1:
-        for edge in infer_edges(uncovered):
+    if uncovered:
+        # 兜底时把"已被道路覆盖"的机位也作为候选锚点，否则像围网12 这种
+        # 只和"已覆盖邻居"相邻的机位永远连不上
+        uncovered_ids = {camera["id"] for camera in uncovered}
+        for edge in infer_edges(cameras):
+            if edge["from_camera_id"] not in uncovered_ids and edge["to_camera_id"] not in uncovered_ids:
+                continue
+            key = (edge["from_camera_id"], edge["to_camera_id"])
+            if key in seen:
+                continue
+            seen.add(key)
             edge["note"] = "道路外就近推断(待复核)"
             edges.append({
                 "from_camera_id": edge["from_camera_id"],
