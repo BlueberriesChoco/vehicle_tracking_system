@@ -1443,17 +1443,15 @@ edges:
   max_travel_sec: 10800
   notes: 人工覆盖：同上（反向）
 - from_camera_id: 围网57
-  to_camera_id: admin_in
-  distance_m: 66.0
+  to_camera_id: admin_out
   min_travel_sec: 20
   max_travel_sec: 3600
-  notes: 人工覆盖：围网57 是行政通道入口的车尾视角，与 admin_in（车头）同一门架
-- from_camera_id: admin_in
+  notes: 人工覆盖：围网57 是行政通道出口的补充视角；匹配时间窗待录像复核
+- from_camera_id: admin_out
   to_camera_id: 围网57
-  distance_m: 66.0
   min_travel_sec: 20
   max_travel_sec: 3600
-  notes: 人工覆盖：同上（反向）
+  notes: 人工覆盖：行政通道出口补充视角（反向）；匹配时间窗待录像复核
 - from_camera_id: 内卡口4
   to_camera_id: 内卡场地西
   distance_m: 25.0

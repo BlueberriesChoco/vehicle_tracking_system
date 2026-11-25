@@ -19,8 +19,19 @@ HYPERLPR_MODELS = {
 
 
 def hyperlpr_model_dir() -> Path:
-    home = Path(os.environ.get("HOMEPATH", str(Path.home()))) if os.name == "nt" else Path.home()
-    return (home / ".hyperlpr3").absolute() / HYPERLPR_MODEL_VERSION / "onnx"
+    """HyperLPR3 模型目录。
+
+    **不能用 ``HOMEPATH``。** Windows 上该变量不含盘符（实测 ``\\Users\\32650``），
+    拼出的路径会按**当前工作盘**解析：在 D 盘启动就变成 ``D:\\Users\\32650\\...``，
+    换到 C 盘又变一个位置。模型只下载在一处，另一处就报 NoSuchFile，
+    随后静默回退到 EasyOCR——车牌识别率从 ~98% 掉到 1% 以下，且日志只有一条 warning。
+
+    ``Path.home()`` 在 Windows 上读 ``USERPROFILE``（含盘符），跨盘一致。
+    部署时若模型放在别处，用 ``HYPERLPR_MODEL_ROOT`` 指定根目录。
+    """
+    override = os.environ.get("HYPERLPR_MODEL_ROOT")
+    root = Path(override) if override else Path.home()
+    return root.absolute() / ".hyperlpr3" / HYPERLPR_MODEL_VERSION / "onnx"
 
 
 class PlateOCR:

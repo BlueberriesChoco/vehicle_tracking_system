@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>综保 A 区 · 摄像头拓扑</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#17252e;--line:#30444e;--text:#eef5f4;--muted:#adc0c6;--accent:#69e5c4;--amber:#ffce7c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "Microsoft YaHei",system-ui,sans-serif}
+header{padding:22px clamp(16px,4vw,48px) 17px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:end;flex-wrap:wrap;gap:12px}h1,h2,p{margin:0}h1{font-size:clamp(24px,4vw,34px)}h2{font-size:18px}
+.eyebrow{color:var(--accent);font-size:14px;font-weight:700;letter-spacing:.12em}.muted,small{color:var(--muted)}small{font-size:13px}
+.stats{display:flex;gap:18px;flex-wrap:wrap}.stats strong{color:var(--accent);font-size:21px;margin-right:5px}
+main{display:grid;grid-template-columns:minmax(230px,275px) minmax(300px,1fr) minmax(255px,320px);gap:12px;padding:12px;max-width:1750px;margin:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-width:0;overflow:hidden}.pad{padding:15px}.stack{display:grid;gap:10px}
+button,input,select{font:inherit;color:inherit;border:1px solid #48616b;border-radius:7px;background:#20343d;padding:6px 10px}button{cursor:pointer}button:hover,a:hover{border-color:var(--accent);color:var(--accent)}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}input{width:100%}
+.camera-list,.links{overflow:auto;max-height:54vh;display:grid;gap:5px;align-content:start}.camera-list button,.links button{text-align:left;width:100%;font-size:14px}.camera-list .active{border-color:var(--accent);background:#21463f;color:var(--accent)}
+.map{position:relative;overflow:hidden;height:min(72vh,850px);min-height:480px;background:#0c171e}.map svg{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.map svg:active{cursor:grabbing}
+.toolbar{position:absolute;z-index:1;top:12px;left:12px;display:flex;gap:4px;flex-wrap:wrap}.toolbar button{background:#172a34}.map-footer{display:flex;gap:14px;flex-wrap:wrap;padding:10px 14px;color:var(--muted);font-size:14px}.legend:before{content:"";width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--accent);margin-right:6px}.legend.manual:before{background:var(--amber)}
+.pick{cursor:pointer}.pick:focus-visible .node{stroke:white;stroke-width:3}.node{fill:#80f3dc;stroke:#143444;stroke-width:1.4}.node.selected{fill:#ffce7c;stroke:#182a31;stroke-width:2.5}.label{fill:#fff;paint-order:stroke;stroke:#101820;stroke-width:4;stroke-linejoin:round;font-weight:700;pointer-events:none}
+.edge{stroke:#6cf4d7;stroke-width:1;opacity:.36;pointer-events:none}.edge.manual{stroke:#ffce7c;opacity:.67}.edge.active{stroke-width:2.8;opacity:1}.route{fill:none;stroke:#173548;stroke-width:4;opacity:.55;pointer-events:none}
+.tag{color:var(--amber)}.links span{display:block;color:var(--muted);font-size:13px}.link-meta{overflow-wrap:anywhere}details{max-width:1726px;margin:0 auto 18px;padding:0 12px}summary{cursor:pointer;padding:12px 0;color:var(--accent)}.files{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}pre{margin:0;padding:12px;background:#0b141a;border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:360px;color:var(--text)}a{color:var(--accent)}
+@media(max-width:950px){main{grid-template-columns:215px minmax(0,1fr)}#detailPanel{grid-column:1/-1}.links{max-height:300px}}
+@media(max-width:620px){main{display:flex;flex-direction:column}.map-panel{order:-1}.map{min-height:380px;height:58vh}.camera-list{max-height:220px}}
+</style>
+</head>
+<body>
+<header><div><p class="eyebrow">综保 A 区</p><h1>摄像头拓扑</h1></div><div class="stats" id="stats"></div></header>
+<main>
+<aside class="panel pad stack"><h2>机位列表</h2><label for="search" class="muted">搜索编号、名称或录像目录</label><input id="search" type="search" placeholder="例如 围网57"><small id="searchCount"></small><div id="cameraList" class="camera-list"></div></aside>
+<section class="panel map-panel" aria-label="拓扑地图">
+  <div class="map"><div class="toolbar"><button id="zoomIn" aria-label="放大">＋</button><button id="zoomOut" aria-label="缩小">－</button><button id="reset">全图</button><button id="focus">定位当前机位</button></div>
+  <svg id="map" aria-label="园区底图。滚轮缩放，拖动平移。"><defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#ffce7c"/></marker></defs><g id="mapLayer"></g></svg></div>
+  <div class="map-footer"><span class="legend">自动边／机位</span><span class="legend manual">人工边／选中机位</span><label for="edgeMode">关联边</label><select id="edgeMode"><option value="near">当前机位</option><option value="all">全部</option><option value="manual">人工覆盖</option></select></div>
+</section>
+<aside class="panel pad stack" id="detailPanel"><h2 id="cameraName"></h2><p class="muted" id="cameraMeta"></p><p id="cameraRole"></p><p class="muted" id="cameraNotes"></p><h2 id="linksTitle">关联边</h2><div id="links" class="links"></div></aside>
+</main>
+<details id="sourcePanel"><summary>查看和下载原始配置</summary><div class="files" id="files"></div><p><a id="download">下载当前文件</a></p><pre id="sourceText"></pre></details>
+<script id="topologyData" type="application/json">__TOPOLOGY_DATA__</script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const data = JSON.parse($("topologyData").textContent);
+const cameras = new Map(data.cameras.map(c => [c.camera_id, c]));
+const edgeKey = (from, to) => JSON.stringify([from, to]);
+const manual = new Set(data.overrides.map(([from, to]) => edgeKey(from, to)));
+const aliases = new Map(data.aliases.map(a => [a.camera_id, a.folder_name]));
+const placed = data.cameras.filter(c => Array.isArray(c.map_xy) && c.map_xy.length === 2);
+const placedIds = new Set(placed.map(c => c.camera_id));
+const edges = data.edges.filter(e => placedIds.has(e.from_camera_id) && placedIds.has(e.to_camera_id));
+const svg = $("map");
+const {width, height} = data.map;
+let view = [0, 0, width, height];
+let selected = cameras.has("围网57") ? "围网57" : data.cameras[0]?.camera_id;
+let drag, activeURL;
+const make = (tag, properties) => Object.assign(document.createElement(tag), properties);
+function shape(tag, attrs, parent) {
+  const item = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs)) item.setAttribute(key, value);
+  parent.append(item);
+  return item;
+}
+function setView(next) { view = next; svg.setAttribute("viewBox", view.join(" ")); }
+function centerOn(id) {
+  if (!placedIds.has(id)) return;
+  const [x,y] = cameras.get(id).map_xy;
+  setView([x-width/7,y-height/7,width/3.5,height/3.5]);
+}
+function zoom(multiplier, x = view[0]+view[2]/2, y = view[1]+view[3]/2) {
+  const [left,top,w,h] = view;
+  const scale = Math.max(width/14, Math.min(width*2,w*multiplier))/w;
+  setView([x+(left-x)*scale,y+(top-y)*scale,w*scale,h*scale]);
+}
+function point(event) {
+  return new DOMPoint(event.clientX,event.clientY).matrixTransform(svg.getScreenCTM().inverse());
+}
+function choose(id, center = false) {
+  selected = id;
+  if (center) centerOn(id);
+  renderMap(); renderList(); renderDetail();
+}
+function renderMap() {
+  const layer = $("mapLayer");
+  layer.replaceChildren();
+  shape("image", {href:data.image,width,height,opacity:.83}, layer);
+  for (const road of data.roads) {
+    shape("polyline", {class:"route",points:road.map(p => [p.x,p.y].join(",")).join(" ")}, layer);
+  }
+  const mode = $("edgeMode").value;
+  for (const edge of edges) {
+    const {from_camera_id:from,to_camera_id:to} = edge;
+    const active = from === selected || to === selected;
+    const marked = manual.has(edgeKey(from,to));
+    if ((mode === "near" && !active) || (mode === "manual" && !marked)) continue;
+    const [x1,y1] = cameras.get(from).map_xy, [x2,y2] = cameras.get(to).map_xy;
+    const length = Math.hypot(x2-x1,y2-y1) || 1;
+    const dx = (x2-x1)/length, dy = (y2-y1)/length;
+    const offset = active ? 2 : 0;
+    const attrs = {x1:x1+dx*5-dy*offset,y1:y1+dy*5+dx*offset,x2:x2-dx*7-dy*offset,y2:y2-dy*7+dx*offset,
+      class:"edge"+(active?" active":"")+(marked?" manual":""),"vector-effect":"non-scaling-stroke"};
+    if (active) attrs["marker-end"]="url(#arrow)";
+    shape("line",attrs,layer);
+  }
+  for (const camera of placed) {
+    const id = camera.camera_id, [x,y] = camera.map_xy;
+    const group = shape("g",{class:"pick",tabindex:"0",role:"button","aria-label":camera.camera_name || id},layer);
+    shape("title",{},group).textContent = camera.camera_name || id;
+    shape("circle",{cx:x,cy:y,r:10,fill:"transparent"},group);
+    shape("circle",{cx:x,cy:y,r:id===selected?7:4.5,class:"node"+(id===selected?" selected":""),"vector-effect":"non-scaling-stroke"},group);
+    group.onclick=()=>choose(id);
+    group.onkeydown=event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();choose(id,true);}};
+  }
+  if(placedIds.has(selected)){
+    const [x,y]=cameras.get(selected).map_xy;
+    shape("text",{x:x+10,y:y-8,class:"label","font-size":19},layer).textContent=selected;
+  }
+}
+function renderList() {
+  const query=$("search").value.trim().toLowerCase();
+  const matches=data.cameras.filter(c => [c.camera_id,c.camera_name,aliases.get(c.camera_id),data.scope[c.camera_id]?.role]
+    .some(value=>String(value || "").toLowerCase().includes(query)));
+  $("searchCount").textContent=matches.length+" 个机位";
+  $("cameraList").replaceChildren(...matches.map(c=>{
+    const same=c.camera_id===selected;
+    const b=make("button",{className:same?"active":"",textContent:c.camera_name === c.camera_id ? c.camera_id : `${c.camera_name} · ${c.camera_id}`});
+    b.setAttribute("aria-current",same?"true":"false");
+    b.onclick=()=>choose(c.camera_id,true);
+    return b;
+  }));
+}
+function renderDetail() {
+  const c=cameras.get(selected);
+  if (!c) return;
+  const role=data.scope[selected] || {};
+  $("cameraName").textContent=c.camera_name || selected;
+  $("cameraMeta").textContent=[selected,aliases.get(selected),c.map_xy?.join(", ")].filter(Boolean).join(" · ");
+  $("cameraRole").textContent=role.role || "";
+  $("cameraNotes").textContent=role.notes || "";
+  const links=data.edges.filter(e=>e.from_camera_id===selected || e.to_camera_id===selected);
+  links.sort((a,b)=>Number(manual.has(edgeKey(b.from_camera_id,b.to_camera_id)))-Number(manual.has(edgeKey(a.from_camera_id,a.to_camera_id))));
+  $("linksTitle").textContent="关联边 · "+links.length;
+  $("links").replaceChildren(...links.map(e=>{
+    const out=e.from_camera_id===selected;
+    const id=out?e.to_camera_id:e.from_camera_id;
+    const type=manual.has(edgeKey(e.from_camera_id,e.to_camera_id))?"人工覆盖":"自动生成";
+    const time=`${e.min_travel_sec ?? "—"}–${e.max_travel_sec ?? "—"} 秒`;
+    const b=make("button");
+    b.append(make("strong",{textContent:(out?"前往 ":"来自 ")+id}),
+      make("span",{textContent:[type,time,e.distance_m==null?"距离未录入":e.distance_m+" 米"].join(" · ")}));
+    if(e.notes)b.append(make("span",{className:"link-meta",textContent:e.notes}));
+    b.onclick=()=>{if(cameras.has(id))choose(id,true);};
+    return b;
+  }));
+}
+function showSource(name) {
+  $("sourceText").textContent=data.sources[name];
+  if(activeURL)URL.revokeObjectURL(activeURL);
+  activeURL=URL.createObjectURL(new Blob([data.sources[name]],{type:"text/plain;charset=utf-8"}));
+  $("download").href=activeURL;
+  $("download").download=name;
+  $("download").textContent="下载 "+name;
+}
+for(const [n,label] of [[cameras.size,"机位"],[data.edges.length,"有向边"],[data.edges.filter(e=>manual.has(edgeKey(e.from_camera_id,e.to_camera_id))).length,"人工边"]]){
+  const entry=make("span");entry.append(make("strong",{textContent:n}),label);$("stats").append(entry);
+}
+for(const name of Object.keys(data.sources)){
+  const b=make("button",{textContent:name});b.onclick=()=>showSource(name);$("files").append(b);
+}
+svg.addEventListener("wheel",event=>{event.preventDefault();const p=point(event);zoom(event.deltaY<0?.83:1.2,p.x,p.y);},{passive:false});
+svg.addEventListener("pointerdown",event=>{if(!event.target.closest(".pick")){drag=point(event);svg.setPointerCapture(event.pointerId);}});
+svg.addEventListener("pointermove",event=>{if(drag){const p=point(event);setView([view[0]+drag.x-p.x,view[1]+drag.y-p.y,view[2],view[3]]);}});
+for(const name of ["pointerup","pointercancel","lostpointercapture"])svg.addEventListener(name,()=>{drag=null;});
+$("zoomIn").onclick=()=>zoom(.75);$("zoomOut").onclick=()=>zoom(1.33);
+$("reset").onclick=()=>setView([0,0,width,height]);$("focus").onclick=()=>centerOn(selected);
+$("edgeMode").onchange=renderMap;$("search").oninput=renderList;
+setView(view);choose(selected,true);showSource("topology.yaml");
+</script>
+</body>
+</html>

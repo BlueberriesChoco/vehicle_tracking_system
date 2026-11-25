@@ -63,6 +63,7 @@
 | `scripts/start.ps1` | Windows 一键启动全链路。 |
 | `scripts/smoke_test.py` | 端到端冒烟测试：串联五个 CLI 并校验输出。 |
 | `scripts/ci.ps1` | 本地 CI：单测 + 冒烟 + 规则审计 + 指标汇总 + 演示包 + 交付清单（共 6 步）。 |
+| `scripts/verify_plate_ocr.py` | 车牌识别分环节验证：分别测「OCR 上限」（给定精确车牌区域）、「端到端」（车辆裁剪 → 检测 → OCR）、「真实入口」（`recognize_track` 多帧投票）。用于区分瓶颈在检测还是 OCR，避免只看总数得出无效结论。 |
 | `Dockerfile` / `docker-compose.yml` | 容器化部署入口，详见 `deploy/README.md`。 |
 | `scripts/build_risk_report.py` | 研究要点四入口。融合 A/G/T 得到风险 R，输出证据链与 Markdown 排查报告。 |
 | `scripts/run_full_pipeline.py` | 一键端到端原型：视频 → 向量 → 告警 → 图谱 → 风险报告。 |
@@ -252,7 +253,24 @@
 | `tests/test_event_writer.py` | 通行事件 writer 测试。 |
 | `tests/test_phase3_anomaly.py` | Phase 3 基线、规则、告警和普通车/货车过滤测试。 |
 | `tests/test_site_topology.py` | 园区空间语义配置加载和引用校验测试。 |
+| `tests/test_risk.py` | 风险融合测试：分量可用性、权重重归一化、证据封顶、`analysis_target=0` 剔除。 |
+| `tests/test_gae.py` | 图自编码器测试：训练收敛、锚点标定、对称图退化、跨批次同误差同分、无锚点回退自标定。 |
+| `tests/test_graph_comparability.py` | 图谱可比性判据测试：同图训练 `comparable=false`、加载基线 `true`、SVD 分支 `false`。 |
+| `tests/test_web_api.py` | 控制台接口测试：产物按 mtime 选取、`risk.json` 命名兼容、非监管对象排除、γ=0.0 不回填、封顶透传、旧产物兼容。 |
 | `tests/__init__.py` | tests 包标记文件。 |
+
+## `tools/` 开发期校验脚本
+
+| 文件 | 作用 |
+|---|---|
+| `tools/console_render_check.js` | 控制台渲染校验。用 Node 内置 `vm` + 最小 DOM 桩执行真实 `web/console/app.js`，断言 20 项渲染结果（封顶红条、`无数据` 文案、KPI 卡片、封顶小标、横幅的五类提示文案）。不依赖浏览器或 playwright，可直接进 CI。 |
+
+## `src/web/` 控制台服务
+
+| 文件 | 作用 |
+|---|---|
+| `src/web/server.py` | 只读 HTTP 服务与目录扫描。按 `mtime` 选取最新产物、兼容 `risk*.json` 命名、分离非监管对象、透传封顶与图谱可比性字段。 |
+| `web/console/index.html` / `app.js` / `style.css` | 排查控制台前端：批次概览、复核清单、单车详情、分数构成与证据链。 |
 
 ## 数据和模型目录
 

@@ -98,7 +98,7 @@ const body = source.replace(/boot\(\)\.catch[\s\S]*$/, "");
 const sandbox = { document: global.document, window: global.window, fetch: global.fetch, console };
 const vm = require("vm");
 const context = vm.createContext(sandbox);
-vm.runInContext(body + "\n;globalThis.__t = { renderDetail, renderReview, renderKpis, state, setBanner };", context);
+vm.runInContext(body + "\n;globalThis.__t = { renderDetail, renderReview, renderKpis, buildBanners, state, setBanner };", context);
 const T = sandbox.__t;
 
 // ---- 断言工具 --------------------------------------------------------------
@@ -247,28 +247,34 @@ check("标注未参与评分", kpiText.includes("未参与评分"));
 
 // ---- 用例 5：横幅说明分量缺失与封顶 ----------------------------------------
 console.log("\n[5] 顶部横幅");
-elements.banner = new Node("div");
-elements.sysStatus = new Node("span");
-// 直接验证横幅拼装逻辑：复用 selectRun 里的规则需要一个 api 桩
-sandbox.fetch = async (url) => ({
-  ok: true,
-  json: async () => {
-    if (String(url).includes("/review")) return [];
-    return {
-      vehicles: 15,
-      medium: 3,
-      high: 0,
-      evidence_total: 0,
-      non_target_count: 0,
-      components_available: { A: false, G: true, T: false },
-      score_ceiling: 75.0,
-      score_capped_count: 2,
-      checks: { calibrated: false },
-      graph: { comparable: false, self_referential: true },
-    };
+// buildBanners 是纯函数，直接喂 detail 断言文案，不必启动服务或 mock fetch
+const single = T.buildBanners(
+  {
+    components_available: { A: false, G: true, T: false },
+    score_ceiling: 75.0,
+    score_capped_count: 2,
+    graph: { comparable: false, self_referential: true },
   },
-});
-check("横幅逻辑已接入（字段存在性检查）", typeof T.setBanner === "function");
+  ["未标定"]
+).join("　");
+check("说明哪些分量未使用", single.includes("行为") && single.includes("频次") && single.includes("无可用数据"), single);
+check("说明权重已重分配", single.includes("重分配"));
+check("说明分数上限与触顶数量", single.includes("75") && single.includes("2 辆触顶"), single);
+check("说明图谱不可跨批次比较", single.includes("不可与其他批次横向比较"), single);
+
+const legacy = T.buildBanners({ score_ceiling: 100.0 }, []).join("　");
+check("旧产物提示未记录分量可用性", legacy.includes("旧口径产物") && legacy.includes("分量可用性"), legacy);
+check("分数上限 100 时不提示封顶", !legacy.includes("分数上限"), legacy);
+
+const clean = T.buildBanners(
+  {
+    components_available: { A: true, G: true, T: true },
+    score_ceiling: 100.0,
+    graph: { comparable: true, self_referential: false },
+  },
+  []
+).join("　");
+check("三路齐全时不产生多余横幅", clean === "", clean);
 
 console.log(`\n${failed === 0 ? "全部通过" : failed + " 项失败"}`);
 process.exit(failed === 0 ? 0 : 1);

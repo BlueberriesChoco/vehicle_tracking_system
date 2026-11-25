@@ -36,3 +36,34 @@ def test_specialized_ocr_checks_plate_size_before_upscaling():
     assert ocr._recognize_hyperlpr(crop, 24) == ("", 0.0)
     ocr.ocr = lambda image: [("\u82cfF12345", 0.98, 0, [0, 0, 75, 30])]
     assert ocr._recognize_hyperlpr(crop, 24) == ("\u82cfF12345", 0.98)
+
+
+def test_model_dir_does_not_use_windows_homepath(monkeypatch):
+    """模型目录必须基于 Path.home()，不能用 HOMEPATH。
+
+    Windows 上 HOMEPATH 只有盘符之后的路径段，**不含盘符**；用它拼路径会按
+    **当前工作盘**解析。实测把模型目录解析到 D 盘，而模型下载在 C 盘用户目录，
+    于是 hyperlpr3 初始化抛 NoSuchFile、静默回退 EasyOCR，
+    车牌识别率从 ~90% 掉到 0.45%，日志里只有一条 warning。
+
+    这个断言防的就是那次回退：路径必须落在真实用户目录下。
+    """
+    from pathlib import Path
+
+    from src.feature_extraction.plate_ocr import HYPERLPR_MODEL_VERSION, hyperlpr_model_dir
+
+    monkeypatch.delenv("HYPERLPR_MODEL_ROOT", raising=False)
+    monkeypatch.setenv("HOMEPATH", "\\Users\\someone_else")
+    path = hyperlpr_model_dir()
+
+    assert path.is_absolute()
+    assert path == (Path.home() / ".hyperlpr3" / HYPERLPR_MODEL_VERSION / "onnx").absolute()
+    assert "someone_else" not in str(path)
+
+
+def test_model_root_can_be_overridden_for_deployment(monkeypatch, tmp_path):
+    """部署时模型可能不在用户目录，需支持 HYPERLPR_MODEL_ROOT 指定根目录。"""
+    from src.feature_extraction.plate_ocr import HYPERLPR_MODEL_VERSION, hyperlpr_model_dir
+
+    monkeypatch.setenv("HYPERLPR_MODEL_ROOT", str(tmp_path))
+    assert hyperlpr_model_dir() == (tmp_path / ".hyperlpr3" / HYPERLPR_MODEL_VERSION / "onnx").absolute()

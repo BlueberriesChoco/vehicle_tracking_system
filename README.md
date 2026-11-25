@@ -12,6 +12,8 @@
 - 交付总览：[`DELIVERY.md`](DELIVERY.md)
 - 技术指标自评：[`ACCEPTANCE_REPORT.md`](ACCEPTANCE_REPORT.md)
 - 指标验证路径对照：[`METRICS_TRACEABILITY.md`](METRICS_TRACEABILITY.md)
+- 技术文献参考：[`REFERENCES.md`](REFERENCES.md)（国内外文献、与指标/模块的对应关系）
+- 车牌昼夜评测：[`PLATE_OCR_EVAL.md`](PLATE_OCR_EVAL.md)（白天/夜晚识别率对照与机理）
 - 性能剖析与优化路线：[`PERFORMANCE.md`](PERFORMANCE.md)
 - 经济效益与社会效益测算：[`BENEFITS.md`](BENEFITS.md)
 - 运行维护手册：[`OPERATIONS.md`](OPERATIONS.md)
@@ -185,7 +187,7 @@ vehicle_tracking_system/
 │   ├── output/              # 向量、事件、告警 CSV/JSON 输出
 │   ├── visualization/       # 可视化绘制与标注视频
 │   └── utils/               # 线程预取读帧、MBF 抽取、日志等
-├── tests/                   # 回归测试：47 个文件、366 条用例
+├── tests/                   # 回归测试：51 个文件、409 条用例
 ├── web/
 │   └── map_editor/          # 园区地图编辑器（纯前端，直接打开 index.html）
 ├── docs/                    # 标定指南与配图
