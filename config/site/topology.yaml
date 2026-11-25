@@ -125,14 +125,14 @@ edges:
 - from_camera_id: 广兴路东
   to_camera_id: admin_out
   min_travel_sec: 20
-  max_travel_sec: 1844
-  distance_m: 24.6
+  max_travel_sec: 1848
+  distance_m: 26.5
   notes: 由道路链自动生成
 - from_camera_id: admin_out
   to_camera_id: 广兴路东
   min_travel_sec: 20
-  max_travel_sec: 1844
-  distance_m: 24.6
+  max_travel_sec: 1848
+  distance_m: 26.5
   notes: 由道路链自动生成
 - from_camera_id: 围网1
   to_camera_id: 主卡口内Q2
@@ -169,6 +169,18 @@ edges:
   min_travel_sec: 39
   max_travel_sec: 2284
   distance_m: 269.0
+  notes: 由道路链自动生成
+- from_camera_id: admin_in
+  to_camera_id: 围网1
+  min_travel_sec: 20
+  max_travel_sec: 1826
+  distance_m: 14.2
+  notes: 由道路链自动生成
+- from_camera_id: 围网1
+  to_camera_id: admin_in
+  min_travel_sec: 20
+  max_travel_sec: 1826
+  distance_m: 14.2
   notes: 由道路链自动生成
 - from_camera_id: 围网2
   to_camera_id: 卡口非机动车道

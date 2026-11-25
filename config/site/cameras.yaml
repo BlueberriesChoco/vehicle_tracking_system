@@ -542,10 +542,10 @@ cameras:
 - camera_id: admin_out
   camera_name: 行政车道出
   map_xy:
-  - 477
-  - 1199
+  - 476
+  - 1204
 - camera_id: admin_in
   camera_name: 行政车道进
   map_xy:
-  - 494
-  - 1209
+  - 493
+  - 1211
