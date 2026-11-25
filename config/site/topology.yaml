@@ -1262,3 +1262,27 @@ edges:
   min_travel_sec: 20
   max_travel_sec: 1800
   notes: 人工覆盖：同上（反向）
+- from_camera_id: 内卡口4
+  to_camera_id: 内卡场地西
+  distance_m: 25.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：内卡口4画面左侧即查验场地西，车辆出门可驶入
+- from_camera_id: 内卡场地西
+  to_camera_id: 内卡口4
+  distance_m: 25.0
+  min_travel_sec: 20
+  max_travel_sec: 3600
+  notes: 人工覆盖：同上（反向）
+- from_camera_id: 内卡口4
+  to_camera_id: 中央路南
+  distance_m: 99.0
+  min_travel_sec: 20
+  max_travel_sec: 1800
+  notes: 人工覆盖：内卡口4画面右侧即中央路，车辆出门可上中央路
+- from_camera_id: 中央路南
+  to_camera_id: 内卡口4
+  distance_m: 99.0
+  min_travel_sec: 20
+  max_travel_sec: 1800
+  notes: 人工覆盖：同上（反向）
