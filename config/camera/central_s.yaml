@@ -1,0 +1,24 @@
+camera_id: central_s
+camera_name: 中央路南
+# 由 scripts/derive_camera_config.py 自动推导，人工复核 ROI 与出入口线后再启用
+roi:
+  polygon:
+  - [1079, 312]
+  - [559, 653]
+  - [60, 261]
+  - [523, 84]
+  - [550, 83]
+  - [558, 84]
+  - [899, 180]
+  - [984, 239]
+entry_line:
+  p1: [672, 0]
+  p2: [313, 399]
+exit_line:
+  p1: [1238, 234]
+  p2: [879, 719]
+calibration:
+  # 未标定：速度/路径/聚集特征会被门控。现场量到 >=4 组控制点后填 homography。
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05
