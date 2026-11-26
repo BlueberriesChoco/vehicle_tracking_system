@@ -2,3 +2,26 @@ camera_id: 围网105
 camera_name: 围网105
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [363, 351]
+  - [627, 356]
+  - [632, 275]
+  - [352, 95]
+  - [440, 85]
+  - [432, 75]
+  - [314, 65]
+  - [280, 43]
+  - [258, 43]
+  - [360, 352]
+bidirectional: true
+entry_lines:
+- p1: [360, 346]
+  p2: [614, 297]
+exit_lines:
+- p1: [344, 66]
+  p2: [396, 85]
+- p1: [259, 49]
+  p2: [304, 51]
+calibration:
+  px_per_meter: 0.0

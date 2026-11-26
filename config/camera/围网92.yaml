@@ -2,3 +2,20 @@ camera_id: 围网92
 camera_name: 围网92
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [474, 15]
+  - [576, 567]
+  - [697, 574]
+  - [702, 154]
+  - [503, 19]
+  - [473, 13]
+bidirectional: true
+entry_lines:
+- p1: [590, 553]
+  p2: [676, 161]
+exit_lines:
+- p1: [471, 23]
+  p2: [538, 35]
+calibration:
+  px_per_meter: 0.0

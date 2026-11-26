@@ -2,3 +2,20 @@ camera_id: 围网63
 camera_name: 围网63
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [358, 81]
+  - [17, 322]
+  - [8, 353]
+  - [286, 356]
+  - [381, 87]
+  - [356, 84]
+bidirectional: true
+entry_lines:
+- p1: [26, 327]
+  p2: [288, 346]
+exit_lines:
+- p1: [344, 93]
+  p2: [383, 91]
+calibration:
+  px_per_meter: 0.0

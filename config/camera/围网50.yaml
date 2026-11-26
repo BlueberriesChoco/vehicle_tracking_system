@@ -2,3 +2,20 @@ camera_id: 围网50
 camera_name: 围网50
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [605, 249]
+  - [853, 709]
+  - [1270, 706]
+  - [1268, 446]
+  - [661, 240]
+  - [604, 250]
+bidirectional: true
+entry_lines:
+- p1: [860, 691]
+  p2: [1229, 447]
+exit_lines:
+- p1: [612, 258]
+  p2: [696, 244]
+calibration:
+  px_per_meter: 0.0

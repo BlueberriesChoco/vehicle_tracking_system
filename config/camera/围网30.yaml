@@ -1,0 +1,21 @@
+camera_id: 围网30
+camera_name: 围网30
+roi:
+  polygon:
+  - [781, 413]
+  - [1240, 717]
+  - [1276, 306]
+  - [656, 307]
+  - [610, 383]
+  - [780, 410]
+bidirectional: true
+entry_lines:
+- p1: [1229, 305]
+  p2: [1229, 691]
+exit_lines:
+- p1: [668, 300]
+  p2: [626, 374]
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

@@ -2,3 +2,19 @@ camera_id: 围网40
 camera_name: 围网40
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [1134, 421]
+  - [1908, 745]
+  - [1902, 510]
+  - [1274, 396]
+  - [1134, 419]
+bidirectional: true
+entry_lines:
+- p1: [1843, 512]
+  p2: [1843, 732]
+exit_lines:
+- p1: [1147, 420]
+  p2: [1332, 409]
+calibration:
+  px_per_meter: 0.0

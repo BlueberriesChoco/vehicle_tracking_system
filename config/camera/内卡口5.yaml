@@ -1,0 +1,21 @@
+camera_id: 内卡口5
+camera_name: 内卡口5
+roi:
+  polygon:
+  - [840, 276]
+  - [839, 1064]
+  - [1892, 1076]
+  - [1903, 261]
+  - [1461, 253]
+  - [839, 272]
+bidirectional: true
+entry_lines:
+- p1: [1528, 248]
+  p2: [1843, 538]
+exit_lines:
+- p1: [1843, 556]
+  p2: [1843, 1037]
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

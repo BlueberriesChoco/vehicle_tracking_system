@@ -2,3 +2,20 @@ camera_id: 围网64
 camera_name: 围网64
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [308, 42]
+  - [6, 327]
+  - [2, 561]
+  - [198, 569]
+  - [335, 37]
+  - [304, 37]
+bidirectional: true
+entry_lines:
+- p1: [28, 358]
+  p2: [246, 385]
+exit_lines:
+- p1: [298, 43]
+  p2: [328, 43]
+calibration:
+  px_per_meter: 0.0

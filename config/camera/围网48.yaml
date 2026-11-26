@@ -2,3 +2,22 @@ camera_id: 围网48
 camera_name: 围网48
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [816, 479]
+  - [1082, 1076]
+  - [1918, 1064]
+  - [1907, 780]
+  - [1333, 547]
+  - [1424, 507]
+  - [1396, 472]
+  - [818, 475]
+bidirectional: true
+entry_lines:
+- p1: [1101, 1037]
+  p2: [1843, 781]
+exit_lines:
+- p1: [1291, 464]
+  p2: [1424, 508]
+calibration:
+  px_per_meter: 0.0

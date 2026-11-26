@@ -2,3 +2,20 @@ camera_id: 围网98
 camera_name: 围网98
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [309, 127]
+  - [410, 352]
+  - [628, 353]
+  - [630, 215]
+  - [356, 122]
+  - [308, 126]
+bidirectional: true
+entry_lines:
+- p1: [614, 225]
+  p2: [417, 346]
+exit_lines:
+- p1: [305, 129]
+  p2: [369, 126]
+calibration:
+  px_per_meter: 0.0

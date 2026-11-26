@@ -1,0 +1,26 @@
+camera_id: 内卡口8
+camera_name: 内卡口8
+roi:
+  polygon:
+  - [317, 150]
+  - [8, 473]
+  - [7, 1061]
+  - [1081, 1069]
+  - [1113, 213]
+  - [746, 124]
+  - [318, 151]
+bidirectional: true
+entry_lines:
+- p1: [381, 140]
+  p2: [734, 149]
+exit_lines:
+- p1: [300, 168]
+  p2: [77, 487]
+- p1: [77, 496]
+  p2: [77, 1037]
+- p1: [77, 1037]
+  p2: [1064, 1037]
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

@@ -4,3 +4,20 @@ calibration:
   px_per_meter: 0.0
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [678, 13]
+  - [922, 706]
+  - [1380, 767]
+  - [1386, 286]
+  - [1330, 253]
+  - [1022, 235]
+  - [758, 11]
+  - [678, 11]
+bidirectional: true
+entry_lines:
+- p1: [1381, 281]
+  p2: [1370, 766]
+exit_lines:
+- p1: [682, 43]
+  p2: [763, 43]

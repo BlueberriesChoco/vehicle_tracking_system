@@ -2,3 +2,25 @@ camera_id: 围网62
 camera_name: 围网62
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [358, 81]
+  - [297, 115]
+  - [85, 151]
+  - [46, 183]
+  - [174, 196]
+  - [10, 334]
+  - [302, 354]
+  - [382, 76]
+  - [360, 77]
+bidirectional: true
+entry_lines:
+- p1: [26, 335]
+  p2: [293, 346]
+exit_lines:
+- p1: [184, 146]
+  p2: [130, 186]
+- p1: [331, 98]
+  p2: [382, 90]
+calibration:
+  px_per_meter: 0.0

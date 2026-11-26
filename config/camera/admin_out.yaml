@@ -19,3 +19,15 @@ exit_line:
   - 950
 calibration:
   px_per_meter: 50.0
+roi:
+  polygon:
+  - - 1820
+    - 280
+  - - 1150
+    - 400
+  - - 0
+    - 640
+  - - 0
+    - 1080
+  - - 1300
+    - 1080

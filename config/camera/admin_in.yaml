@@ -31,3 +31,15 @@ calibration:
   px_per_meter: 70.0
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - - 0
+    - 1080
+  - - 1200
+    - 1080
+  - - 1250
+    - 320
+  - - 850
+    - 300
+  - - 0
+    - 600

@@ -2,3 +2,20 @@ camera_id: 围网111
 camera_name: 围网111
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [331, 55]
+  - [453, 355]
+  - [632, 352]
+  - [633, 215]
+  - [359, 53]
+  - [332, 51]
+bidirectional: true
+entry_lines:
+- p1: [453, 346]
+  p2: [614, 222]
+exit_lines:
+- p1: [335, 59]
+  p2: [370, 63]
+calibration:
+  px_per_meter: 0.0

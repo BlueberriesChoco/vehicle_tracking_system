@@ -2,3 +2,26 @@ camera_id: 围网61
 camera_name: 围网61
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [274, 105]
+  - [245, 127]
+  - [213, 120]
+  - [201, 132]
+  - [226, 137]
+  - [11, 275]
+  - [4, 355]
+  - [192, 355]
+  - [280, 110]
+  - [273, 107]
+bidirectional: true
+entry_lines:
+- p1: [26, 304]
+  p2: [188, 346]
+exit_lines:
+- p1: [226, 123]
+  p2: [203, 143]
+- p1: [262, 109]
+  p2: [281, 116]
+calibration:
+  px_per_meter: 0.0

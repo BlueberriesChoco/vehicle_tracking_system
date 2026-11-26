@@ -2,3 +2,19 @@ camera_id: 围网117
 camera_name: 围网117
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [270, 76]
+  - [356, 355]
+  - [637, 289]
+  - [302, 77]
+  - [270, 74]
+bidirectional: true
+entry_lines:
+- p1: [354, 346]
+  p2: [614, 288]
+exit_lines:
+- p1: [272, 79]
+  p2: [310, 83]
+calibration:
+  px_per_meter: 0.0

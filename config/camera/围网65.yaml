@@ -2,3 +2,20 @@ camera_id: 围网65
 camera_name: 围网65
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [338, 67]
+  - [6, 255]
+  - [7, 359]
+  - [259, 355]
+  - [369, 74]
+  - [336, 67]
+bidirectional: true
+entry_lines:
+- p1: [26, 272]
+  p2: [267, 346]
+exit_lines:
+- p1: [322, 75]
+  p2: [368, 74]
+calibration:
+  px_per_meter: 0.0

@@ -45,17 +45,31 @@ class SceneGeometry:
 
     @staticmethod
     def _normalize_lines(raw) -> list:
-        """把「单条线」或「多条线的列表」统一成 [((x1,y1),(x2,y2)), ...]。"""
+        """把「单条线」「多条线的列表」「{p1,p2} 字典列表」统一成 [((x1,y1),(x2,y2)), ...]。"""
         if not raw:
             return []
+        if isinstance(raw, dict):
+            raw = [raw]
+
+        def _is_point(value) -> bool:
+            return (isinstance(value, (list, tuple)) and len(value) == 2
+                    and all(isinstance(item, (int, float)) for item in value))
+
         # 单条线：((x1,y1), (x2,y2))
-        if isinstance(raw, (list, tuple)) and len(raw) == 2 and not isinstance(raw[0][0], (list, tuple)):
+        if (isinstance(raw, (list, tuple)) and len(raw) == 2
+                and _is_point(raw[0]) and _is_point(raw[1])):
             return [(tuple(raw[0]), tuple(raw[1]))]
+
         lines = []
         for item in raw:
-            if not item or len(item) != 2:
-                continue
-            lines.append((tuple(item[0]), tuple(item[1])))
+            if isinstance(item, dict):
+                p1, p2 = item.get("p1"), item.get("p2")
+                if _is_point(p1) and _is_point(p2):
+                    lines.append((tuple(p1), tuple(p2)))
+            elif (isinstance(item, (list, tuple)) and len(item) == 2
+                  and _is_point(item[0]) and _is_point(item[1])):
+                # [[x1,y1], [x2,y2]]
+                lines.append((tuple(item[0]), tuple(item[1])))
         return lines
 
     # 兼容旧代码：取第一条线

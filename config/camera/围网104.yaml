@@ -2,3 +2,20 @@ camera_id: 围网104
 camera_name: 围网104
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [463, 572]
+  - [703, 565]
+  - [697, 385]
+  - [388, 66]
+  - [355, 59]
+  - [457, 570]
+bidirectional: true
+entry_lines:
+- p1: [472, 553]
+  p2: [676, 397]
+exit_lines:
+- p1: [354, 102]
+  p2: [417, 99]
+calibration:
+  px_per_meter: 0.0

@@ -2,3 +2,20 @@ camera_id: 围网93
 camera_name: 围网93
 anomaly:
   contamination: 0.05
+roi:
+  polygon:
+  - [349, 168]
+  - [422, 575]
+  - [692, 565]
+  - [692, 386]
+  - [400, 182]
+  - [344, 163]
+bidirectional: true
+entry_lines:
+- p1: [676, 390]
+  p2: [428, 553]
+exit_lines:
+- p1: [342, 176]
+  p2: [412, 178]
+calibration:
+  px_per_meter: 0.0
