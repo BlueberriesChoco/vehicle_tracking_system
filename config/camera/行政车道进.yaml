@@ -1,0 +1,6 @@
+camera_id: 行政车道进
+camera_name: 行政车道进
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

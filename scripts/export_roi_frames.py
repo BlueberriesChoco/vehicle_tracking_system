@@ -78,6 +78,8 @@ def main() -> None:
     parser.add_argument("--out-dir", default="data/outputs/roi_frames")
     parser.add_argument("--config-dir", default="config/camera")
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--strip-existing", action="store_true", help="manifest 里不带已有 roi/进出线（人工全新标定时用）")
+    parser.add_argument("--manifest-only", action="store_true", help="不重新取帧，只用已有 jpg 重建 manifest")
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -90,7 +92,18 @@ def main() -> None:
     for index, folder in enumerate(folders, start=1):
         camera = os.path.basename(folder)
         source = pick_file(folder)
-        entry = {"camera": camera, "frame": None, "width": 0, "height": 0, **existing_config(camera, args.config_dir)}
+        existing = {} if args.strip_existing else existing_config(camera, args.config_dir)
+        entry = {"camera": camera, "frame": None, "width": 0, "height": 0, **existing}
+        if args.manifest_only:
+            frame_path = os.path.join(args.out_dir, f"{camera}.jpg")
+            if os.path.isfile(frame_path):
+                import cv2 as _cv2
+                import numpy as _np
+                image = _cv2.imdecode(_np.fromfile(frame_path, dtype=_np.uint8), _cv2.IMREAD_COLOR)
+                if image is not None:
+                    entry.update({"frame": f"{camera}.jpg", "height": image.shape[0], "width": image.shape[1]})
+            manifest.append(entry)
+            continue
         if not source:
             entry["error"] = "无 mbf"
             manifest.append(entry)

@@ -1,0 +1,6 @@
+camera_id: 卡口7
+camera_name: 卡口7
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

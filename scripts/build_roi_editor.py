@@ -70,7 +70,7 @@ HTML = r"""<!DOCTYPE html>
 <script>
 const FRAME_PREFIX = "__FRAME_PREFIX__";
 const CAMS = JSON.parse(document.getElementById("manifest").textContent).cameras;
-const KEY = "roi-editor-v1";
+const KEY = "roi-editor-v2";  // v2：清空旧 ROI 后重新标定，避免读到历史数据
 const cv = document.getElementById("cv");
 const ctx = cv.getContext("2d");
 const img = new Image();

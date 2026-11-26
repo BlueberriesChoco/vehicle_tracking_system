@@ -1,0 +1,6 @@
+camera_id: 围网32
+camera_name: 围网32
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

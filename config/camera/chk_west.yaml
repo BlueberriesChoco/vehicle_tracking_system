@@ -1,23 +1,20 @@
 camera_id: chk_west
 camera_name: 查验平台西
-# 由 scripts/derive_camera_config.py 自动推导，人工复核 ROI 与出入口线后再启用
-roi:
-  polygon:
-  - [888, 516]
-  - [886, 518]
-  - [688, 633]
-  - [604, 543]
-  - [605, 538]
-  - [880, 513]
-  - [884, 513]
 entry_line:
-  p1: [900, 671]
-  p2: [872, 384]
+  p1:
+  - 900
+  - 671
+  p2:
+  - 872
+  - 384
 exit_line:
-  p1: [619, 699]
-  p2: [591, 412]
+  p1:
+  - 619
+  - 699
+  p2:
+  - 591
+  - 412
 calibration:
-  # 未标定：速度/路径/聚集特征会被门控。现场量到 >=4 组控制点后填 homography。
   px_per_meter: 0.0
 anomaly:
   contamination: 0.05

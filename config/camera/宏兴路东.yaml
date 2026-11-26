@@ -1,0 +1,6 @@
+camera_id: 宏兴路东
+camera_name: 宏兴路东
+calibration:
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05
