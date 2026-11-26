@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>机位 ROI 标定</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Microsoft YaHei",system-ui,sans-serif; background:#0f172a; color:#e2e8f0; height:100vh; display:flex; flex-direction:column; }
+  header { padding:8px 12px; background:#1e3a5f; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  header strong { font-size:15px; }
+  .hint { font-size:12px; color:#a9c4de; }
+  button { padding:4px 10px; border:1px solid #64748b; background:#334155; color:#fff; border-radius:4px; cursor:pointer; font-size:13px; }
+  button:hover { background:#475569; }
+  button.active { background:#0ea5e9; border-color:#0ea5e9; }
+  main { flex:1; display:grid; grid-template-columns:1fr 290px; min-height:0; }
+  #stage { overflow:auto; background:#050a14; }
+  canvas { display:block; cursor:crosshair; }
+  aside { border-left:1px solid #334155; display:flex; flex-direction:column; min-height:0; }
+  .search { padding:8px; border-bottom:1px solid #334155; }
+  .search input { width:100%; padding:6px 8px; background:#0b1220; color:#e2e8f0; border:1px solid #334155; border-radius:4px; }
+  #list { flex:1; overflow:auto; }
+  .item { padding:5px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between; }
+  .item:hover { background:#1e293b; }
+  .item.sel { background:#0c4a6e; }
+  .item.done { color:#4ade80; }
+  .item .dot { font-size:11px; color:#64748b; }
+  footer { padding:6px 12px; border-top:1px solid #334155; font-size:12px; color:#94a3b8; display:flex; gap:14px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header>
+  <strong>机位 ROI 标定</strong>
+  <button id="mRoi" class="active">1 ROI</button>
+  <button id="mEntry">2 入口线</button>
+  <button id="mExit">3 出口线</button>
+  <button id="finish">完成(Enter)</button>
+  <button id="undo">撤销点</button>
+  <button id="clear">清空当前</button>
+  <button id="prev">上一台(P)</button>
+  <button id="next">下一台(N)</button>
+  <label class="hint"><input type="checkbox" id="bothWay" /> 双向车道</label>
+  <button id="export">导出 JSON</button>
+  <span class="hint">点图加点；ROI 至少 3 点；线只需 2 点</span>
+</header>
+<main>
+  <div id="stage"><canvas id="cv"></canvas></div>
+  <aside>
+    <div class="search"><input id="q" placeholder="搜索机位…" /></div>
+    <div id="list"></div>
+  </aside>
+</main>
+<footer>
+  <span id="status">未选择机位</span>
+  <span id="progress"></span>
+</footer>
+
+<script id="manifest" type="application/json">{"cameras": [{"camera": "中央路北", "frame": "中央路北.jpg", "width": 1280, "height": 720, "roi": [[920, 43], [724, 630], [286, 617], [428, 169], [654, 61]], "calibration": {"px_per_meter": 0.0}}, {"camera": "中央路南", "frame": "中央路南.jpg", "width": 1280, "height": 720, "roi": [[1279, 258], [1131, 719], [71, 241], [515, 64]], "calibration": {"px_per_meter": 0.0}}, {"camera": "主卡口内Q2", "frame": "主卡口内Q2.jpg", "width": 1920, "height": 1080, "roi": [[1919, 849], [1291, 1054], [0, 832], [1377, 582], [1666, 617]], "calibration": {"px_per_meter": 0.0}}, {"camera": "主卡口外Q1", "frame": "主卡口外Q1.jpg", "width": 1920, "height": 1080, "roi": [[1919, 718], [1580, 1079], [11, 1045], [0, 779], [540, 608], [1446, 552]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口1", "frame": "内卡口1.jpg", "width": 1920, "height": 1080, "roi": [[1919, 385], [1759, 512], [0, 346], [294, 285], [1715, 309]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口10", "frame": "内卡口10.jpg", "width": 1920, "height": 1080, "roi": [[1746, 72], [836, 474], [542, 458], [490, 33]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口11", "frame": "内卡口11.jpg", "width": 1920, "height": 1080, "roi": [[1869, 1079], [1869, 1045]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口2", "frame": "内卡口2.jpg", "width": 1920, "height": 1080, "roi": [[854, 417], [237, 404], [187, 387], [276, 369]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口3", "frame": "内卡口3.jpg", "width": 1920, "height": 1080, "roi": [[1886, 373], [1856, 413], [1606, 578], [1308, 375], [1291, 247], [1361, 243]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口4", "frame": "内卡口4.jpg", "width": 1920, "height": 1080, "roi": [[1096, 879], [951, 997], [710, 962], [354, 871], [2, 751], [0, 737], [0, 284], [0, 282], [0, 282], [1075, 865]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡口5", "frame": "内卡口5.jpg", "width": 1920, "height": 1080}, {"camera": "内卡口8", "frame": "内卡口8.jpg", "width": 1920, "height": 1080}, {"camera": "内卡口9", "frame": "内卡口9.jpg", "width": 1920, "height": 1080, "roi": [[50, 944], [343, 884], [692, 888]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡场地东北", "frame": "内卡场地东北.jpg", "width": 1920, "height": 1080, "roi": [[1919, 381], [1894, 381], [1783, 372], [1439, 342], [1155, 304], [1129, 300], [1077, 288]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡场地西", "frame": "内卡场地西.jpg", "width": 1920, "height": 1080, "roi": [[311, 664], [305, 667], [275, 628], [287, 618], [322, 638]], "calibration": {"px_per_meter": 0.0}}, {"camera": "内卡场地西南", "frame": "内卡场地西南.jpg", "width": 1920, "height": 1080}, {"camera": "卡口1", "frame": "卡口1.jpg", "width": 1920, "height": 1080, "roi": [[1919, 525], [105, 687], [0, 544], [444, 304], [1304, 326]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口2", "frame": "卡口2.jpg", "width": 1280, "height": 720, "roi": [[693, 286], [0, 256], [382, 223]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口3", "frame": "卡口3.jpg", "width": 1280, "height": 720, "roi": [[1268, 434], [544, 530], [97, 171], [448, 184]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口4", "frame": "卡口4.jpg", "width": 1920, "height": 1080, "roi": [[1590, 1008], [1578, 1028], [1542, 1029], [1526, 1008], [1550, 983], [1589, 995]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口5", "frame": "卡口5.jpg", "width": 1280, "height": 720, "roi": [[1279, 215], [1140, 643], [26, 293], [661, 81]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口6", "frame": "卡口6.jpg", "width": 1280, "height": 720, "roi": [[1094, 636], [153, 399], [0, 232], [0, 176], [607, 62], [1053, 133]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口7", "frame": "卡口7.jpg", "width": 1920, "height": 1080, "roi": [[1919, 1079], [0, 559], [993, 347], [1527, 450], [1919, 645]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口8", "frame": "卡口8.jpg", "width": 1920, "height": 1080, "roi": [[1919, 761], [1801, 990], [0, 138], [1770, 472]], "calibration": {"px_per_meter": 0.0}}, {"camera": "卡口非机动车道", "frame": "卡口非机动车道.jpg", "width": 1920, "height": 1080, "roi": [[1908, 1079], [651, 1079], [585, 955], [603, 231], [904, 39], [1473, 120], [1887, 809]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网1", "frame": "围网1.jpg", "width": 1920, "height": 1080, "roi": [[1919, 881], [1331, 897], [880, 821], [866, 794], [1001, 741], [1915, 823]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网10", "frame": "围网10.jpg", "width": 1920, "height": 1080, "roi": [[1919, 868], [38, 571], [1336, 422], [1919, 630]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网100", "frame": "围网100.jpg", "width": 352, "height": 288, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网101", "frame": "围网101.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网102", "frame": "围网102.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网103", "frame": "围网103.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网104", "frame": "围网104.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网105", "frame": "围网105.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网106", "frame": "围网106.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网107", "frame": "围网107.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网108", "frame": "围网108.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网109", "frame": "围网109.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网11", "frame": "围网11.jpg", "width": 1920, "height": 1080, "roi": [[1919, 409], [1791, 794], [1487, 688], [1091, 471], [1536, 406]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网110", "frame": "围网110.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网111", "frame": "围网111.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网112", "frame": "围网112.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网113", "frame": "围网113.jpg", "width": 704, "height": 576, "roi": [[687, 575], [430, 396], [598, 575], [422, 463]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网114", "frame": "围网114.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网115", "frame": "围网115.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网116", "frame": "围网116.jpg", "width": 704, "height": 576, "roi": [[521, 247], [666, 143], [703, 155]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网117", "frame": "围网117.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网118", "frame": "围网118.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网119", "frame": "围网119.jpg", "width": 704, "height": 576, "roi": [[575, 431], [388, 71], [396, 36], [443, 32]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网12", "frame": "围网12.jpg", "width": 1920, "height": 1080, "roi": [[1919, 686], [1808, 1038], [0, 236], [0, 115], [278, 0], [1919, 465]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网120", "frame": "围网120.jpg", "width": 704, "height": 576, "roi": [[396, 110], [391, 139], [357, 139], [352, 110]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网121", "frame": "围网121.jpg", "width": 1920, "height": 1080, "roi": [[1843, 403], [1390, 538], [1096, 575], [1087, 522], [1081, 318]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网13", "frame": "围网13.jpg", "width": 1920, "height": 1080, "roi": [[137, 965], [79, 968], [70, 954], [69, 939], [76, 918], [111, 916], [121, 922], [138, 954]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网14", "frame": "围网14.jpg", "width": 1280, "height": 720, "roi": [[733, 541], [318, 241], [516, 156], [629, 211]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网15", "frame": "围网15.jpg", "width": 1920, "height": 1080, "roi": [[241, 554], [220, 548], [245, 480], [655, 473], [700, 477], [697, 510]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网16", "frame": "围网16.jpg", "width": 1920, "height": 1080, "roi": [[1529, 1079], [99, 745], [996, 403]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网17", "frame": "围网17.jpg", "width": 1920, "height": 1080, "roi": [[606, 462], [483, 672], [92, 977], [33, 924], [12, 758], [123, 609]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网18", "frame": "围网18.jpg", "width": 1920, "height": 1080, "roi": [[1440, 536], [1410, 547], [1392, 523], [1395, 510], [1440, 510]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网19", "frame": "围网19.jpg", "width": 1280, "height": 720, "roi": [[695, 78], [695, 79], [134, 234], [133, 233], [655, 78]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网2", "frame": "围网2.jpg", "width": 1920, "height": 1080, "roi": [[1575, 519], [1135, 739], [291, 400]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网20", "frame": "围网20.jpg", "width": 1280, "height": 720, "roi": [[1270, 401], [160, 719], [160, 719], [722, 140], [731, 139], [1267, 382]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网21", "frame": "围网21.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网22", "frame": "围网22.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网23", "frame": "围网23.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网24", "frame": "围网24.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网25", "frame": "围网25.jpg", "width": 1920, "height": 1080, "roi": [[676, 389], [677, 377], [766, 381], [693, 413]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网26", "frame": "围网26.jpg", "width": 1920, "height": 1080, "roi": [[1030, 382], [1020, 386], [1016, 383], [1020, 382], [1026, 380], [1029, 381]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网27", "frame": "围网27.jpg", "width": 1280, "height": 720, "roi": [[1210, 420], [845, 509], [597, 439], [608, 308], [1208, 401]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网29", "frame": "围网29.jpg", "width": 1920, "height": 1080, "roi": [[1862, 617], [1709, 848], [704, 409], [767, 386]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网3", "frame": "围网3.jpg", "width": 1280, "height": 720, "roi": [[1188, 719], [965, 719], [0, 328], [1141, 336]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网30", "frame": "围网30.jpg", "width": 1280, "height": 720}, {"camera": "围网31", "frame": "围网31.jpg", "width": 1920, "height": 1080, "roi": [[1500, 382], [934, 478], [936, 426], [1175, 254], [1276, 227]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网32", "frame": "围网32.jpg", "width": 1280, "height": 720, "roi": [[1279, 198], [1220, 439], [104, 117], [1113, 141]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网33", "frame": "围网33.jpg", "width": 1280, "height": 720, "roi": [[1279, 273], [36, 163], [29, 132], [1068, 161], [1189, 191]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网34", "frame": "围网34.jpg", "width": 1280, "height": 720, "roi": [[1279, 365], [22, 263], [848, 199], [1259, 302]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网35", "frame": "围网35.jpg", "width": 1920, "height": 1080, "roi": [[1795, 524], [1636, 650], [741, 263], [1712, 367]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网36", "frame": "围网36.jpg", "width": 1280, "height": 720, "roi": [[1279, 193], [1216, 299], [726, 108]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网39", "frame": "围网39.jpg", "width": 1280, "height": 720}, {"camera": "围网4", "frame": "围网4.jpg", "width": 1920, "height": 1080, "roi": [[1713, 1079], [1523, 1079], [985, 708], [740, 372], [746, 302], [1085, 533]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网40", "frame": "围网40.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网41", "frame": "围网41.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网42", "frame": "围网42.jpg", "width": 1920, "height": 1080, "roi": [[1344, 175], [1329, 187], [1254, 169], [1252, 164], [1252, 163], [1255, 162], [1255, 162], [1342, 172]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网43", "frame": "围网43.jpg", "width": 1280, "height": 720, "roi": [[1183, 383], [913, 423], [829, 388], [742, 345], [737, 342], [735, 332], [737, 328], [809, 319], [838, 319], [975, 331], [1121, 363]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网44", "frame": "围网44.jpg", "width": 1280, "height": 720, "roi": [[1229, 423], [1027, 559], [621, 341], [770, 321]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网45", "frame": "围网45.jpg", "width": 1920, "height": 1080, "roi": [[1859, 740], [1507, 523], [1544, 416], [1722, 424]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网46", "frame": "围网46.jpg", "width": 1920, "height": 1080, "roi": [[638, 94], [636, 102], [553, 99], [552, 97]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网47", "frame": "围网47.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网48", "frame": "围网48.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网49", "frame": "围网49.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网5", "frame": "围网5.jpg", "width": 1920, "height": 1080, "roi": [[1295, 880], [316, 762], [285, 718], [950, 426], [1110, 537]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网50", "frame": "围网50.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网51", "frame": "围网51.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网52", "frame": "围网52.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网53", "frame": "围网53.jpg", "width": 1920, "height": 1080, "roi": [[1861, 529], [1860, 531], [1860, 529], [1860, 528], [1860, 525], [1861, 525]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网54", "frame": "围网54.jpg", "width": 1280, "height": 720, "roi": [[503, 467], [161, 127], [427, 464], [247, 283], [489, 457], [134, 102]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网55", "frame": "围网55.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网56", "frame": "围网56.jpg", "width": 1280, "height": 720, "roi": [[1279, 129], [1239, 309], [0, 187]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网57", "frame": "围网57.jpg", "width": 1280, "height": 720, "roi": [[1279, 497], [210, 633], [685, 149], [1242, 371]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网58", "frame": "围网58.jpg", "width": 352, "height": 288, "roi": [[22, 60], [115, 153], [82, 50], [117, 79], [108, 70], [130, 92], [110, 91], [150, 133], [29, 65], [158, 195]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网59", "frame": "围网59.jpg", "width": 640, "height": 360}, {"camera": "围网6", "frame": "围网6.jpg", "width": 1920, "height": 1080, "roi": [[1635, 864], [0, 803], [767, 493]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网60", "frame": "围网60.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网61", "frame": "围网61.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网62", "frame": "围网62.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网63", "frame": "围网63.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网64", "frame": "围网64.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网65", "frame": "围网65.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网66", "frame": "围网66.jpg", "width": 640, "height": 360, "roi": [[368, 95], [305, 156], [298, 155], [363, 93]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网67", "frame": "围网67.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网68", "frame": "围网68.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网7", "frame": "围网7.jpg", "width": 1920, "height": 1080, "roi": [[98, 444], [98, 446], [96, 446], [96, 445], [96, 444]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网8", "frame": "围网8.jpg", "width": 1920, "height": 1080}, {"camera": "围网9", "frame": "围网9.jpg", "width": 1280, "height": 720, "roi": [[370, 309], [171, 380], [135, 373], [260, 292]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网91", "frame": "围网91.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网92", "frame": "围网92.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网93", "frame": "围网93.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网94", "frame": "围网94.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网95", "frame": "围网95.jpg", "width": 704, "height": 576, "roi": [[0, 221], [56, 164], [355, 216], [392, 235]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网96", "frame": "围网96.jpg", "width": 704, "height": 576, "roi": [[30, 58], [197, 225], [40, 46], [198, 204], [102, 68], [250, 222], [38, 73], [201, 236]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网97", "frame": "围网97.jpg", "width": 704, "height": 576, "roi": [[246, 251], [117, 155], [215, 252], [94, 128], [203, 236], [117, 117], [186, 185], [206, 167], [226, 190], [176, 180]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网98", "frame": "围网98.jpg", "width": 640, "height": 360, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网99", "frame": "围网99.jpg", "width": 704, "height": 576, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网Q1", "frame": "围网Q1.jpg", "width": 1920, "height": 1080, "roi": [[1885, 840], [578, 1079], [511, 1043], [391, 544], [939, 505], [1883, 749]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网Q10云台", "frame": "围网Q10云台.jpg", "width": 1920, "height": 1080, "roi": [[1799, 391], [1800, 386], [1816, 390], [1806, 392]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网Q11", "frame": "围网Q11.jpg", "width": 1920, "height": 1080, "roi": [[753, 718], [564, 529], [680, 720], [748, 713], [558, 524], [749, 715], [557, 523]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网Q2云台", "frame": "围网Q2云台.jpg", "width": 1920, "height": 1080}, {"camera": "围网Q3云台", "frame": "围网Q3云台.jpg", "width": 1920, "height": 1080, "roi": [[1193, 1079], [870, 927], [1171, 1049]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网Q4云台", "frame": "围网Q4云台.jpg", "width": 1920, "height": 1080}, {"camera": "围网Q5云台", "frame": "围网Q5云台.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网Q6云台", "frame": "围网Q6云台.jpg", "width": 1920, "height": 1080, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网Q7云台", "frame": "围网Q7云台.jpg", "width": 1280, "height": 720, "roi": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]]}, {"camera": "围网Q8云台", "frame": "围网Q8云台.jpg", "width": 1920, "height": 1080, "roi": [[769, 117], [769, 121], [757, 78], [761, 78]], "calibration": {"px_per_meter": 0.0}}, {"camera": "围网Q9云台", "frame": "围网Q9云台.jpg", "width": 1920, "height": 1080, "roi": [[138, 380], [138, 378], [136, 373], [136, 371], [137, 371], [927, 523]], "calibration": {"px_per_meter": 0.0}}, {"camera": "宏兴路东", "frame": "宏兴路东.jpg", "width": 1280, "height": 720, "roi": [[1243, 441], [245, 528], [252, 282], [359, 66], [1135, 326]], "calibration": {"px_per_meter": 0.0}}, {"camera": "宏兴路南", "frame": "宏兴路南.jpg", "width": 1280, "height": 720, "roi": [[842, 448], [483, 459], [39, 217], [787, 263]], "calibration": {"px_per_meter": 0.0}}, {"camera": "宏兴路西", "frame": "宏兴路西.jpg", "width": 1920, "height": 1080, "roi": [[1253, 1071], [244, 483], [465, 200], [746, 58], [1098, 53]], "calibration": {"px_per_meter": 0.0}}, {"camera": "广兴路东", "frame": "广兴路东.jpg", "width": 1280, "height": 720, "roi": [[1279, 235], [1205, 719], [128, 719], [9, 596], [48, 70], [628, 45]], "calibration": {"px_per_meter": 0.0}}, {"camera": "广兴路西", "frame": "广兴路西.jpg", "width": 1280, "height": 720, "roi": [[1248, 542], [0, 461], [340, 96], [659, 157]], "calibration": {"px_per_meter": 0.0}}, {"camera": "查验平台东", "frame": "查验平台东.jpg", "width": 1920, "height": 1080, "roi": [[1822, 81], [1525, 1079], [1525, 1079], [743, 353], [745, 351], [810, 311], [1610, 48]], "calibration": {"px_per_meter": 0.0}}, {"camera": "查验平台西", "frame": "查验平台西.jpg", "width": 1920, "height": 1080, "roi": [[1281, 247], [771, 518], [372, 610], [213, 517], [119, 433], [119, 432], [122, 428], [950, 244], [957, 243], [1020, 240], [1024, 240]], "calibration": {"px_per_meter": 0.0}}, {"camera": "物流仓库东", "frame": "物流仓库东.jpg", "width": 1280, "height": 720, "roi": [[589, 603], [685, 698], [652, 613], [741, 719], [598, 635], [701, 719]], "calibration": {"px_per_meter": 0.0}}, {"camera": "行政车道出", "frame": "行政车道出.jpg", "width": 1920, "height": 1080, "roi": [[1695, 328], [586, 1079], [36, 414]], "calibration": {"px_per_meter": 0.0}}, {"camera": "行政车道进", "frame": "行政车道进.jpg", "width": 1920, "height": 1080, "roi": [[1919, 344], [650, 1079], [311, 1079], [419, 439], [1418, 213]], "calibration": {"px_per_meter": 0.0}}]}</script>
+<script>
+const FRAME_PREFIX = "../../data/outputs/roi_frames/";
+const CAMS = JSON.parse(document.getElementById("manifest").textContent).cameras;
+const KEY = "roi-editor-v1";
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const img = new Image();
+let index = -1;
+let mode = "roi";            // roi | entry_line | exit_line
+let draft = [];              // 当前正在画的点
+let records = JSON.parse(localStorage.getItem(KEY) || "{}");
+
+function cam() { return CAMS[index]; }
+function rec() { return records[cam().camera] || {}; }
+function save() { records[cam().camera] = rec(); localStorage.setItem(KEY, JSON.stringify(records)); }
+function syncBothWay() { const r = rec(); document.getElementById("bothWay").checked = !!r.bidirectional; }
+
+function ensureLoaded() {
+  const c = cam();
+  if (!c) return;
+  draft = [];
+  if (!c.frame) { setStatus("该机位没有参考帧"); ctx.clearRect(0,0,cv.width,cv.height); return; }
+  img.onload = () => { cv.width = img.naturalWidth; cv.height = img.naturalHeight; draw(); };
+  img.src = FRAME_PREFIX + encodeURIComponent(c.frame);
+}
+
+function draw() {
+  if (!img.complete || !img.naturalWidth) return;
+  cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+  ctx.drawImage(img, 0, 0);
+  const c = cam();
+  const r = rec();
+  // 已有配置
+  if ((r.roi && r.roi.length >= 3) || (c.roi && c.roi.length >= 3 && !r.roi)) {
+    strokePoly((r.roi || c.roi), "#fbbf24", true);
+  }
+  if ((r.entry_line && r.entry_line.length === 2) || (c.entry_line && !r.entry_line)) {
+    strokePoly((r.entry_line || c.entry_line), "#22c55e", false, "入口");
+  }
+  if ((r.exit_line && r.exit_line.length === 2) || (c.exit_line && !r.exit_line)) {
+    strokePoly((r.exit_line || c.exit_line), "#ef4444", false, "出口");
+  }
+  // 正在画的
+  if (draft.length) {
+    ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    draft.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.stroke();
+    draft.forEach((p) => { ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, Math.PI*2); ctx.fillStyle = "#38bdf8"; ctx.fill(); });
+  }
+}
+
+function strokePoly(points, color, close, label) {
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath();
+  points.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+  if (close) ctx.closePath();
+  ctx.stroke();
+  if (label) {
+    ctx.fillStyle = color; ctx.font = "16px Microsoft YaHei";
+    ctx.fillText(label, points[0][0] + 6, points[0][1] - 8);
+  }
+}
+
+function toPoint(ev) {
+  const rect = cv.getBoundingClientRect();
+  return [Math.round((ev.clientX - rect.left) * cv.width / rect.width),
+          Math.round((ev.clientY - rect.top) * cv.height / rect.height)];
+}
+
+cv.addEventListener("click", (ev) => {
+  if (!cam()) return;
+  draft.push(toPoint(ev));
+  draw();
+  setStatus(`当前 ${mode} 已加 ${draft.length} 点`);
+});
+
+function finish() {
+  if (!cam()) return;
+  const need = mode === "roi" ? 3 : 2;
+  if (draft.length < need) { setStatus(`${mode} 至少要 ${need} 个点`); return; }
+  const r = rec();
+  if (mode === "roi") r.roi = draft.slice();
+  else r[mode] = [draft[0], draft[draft.length - 1]];
+  draft = [];
+  save(); draw(); renderList();
+  setStatus(`${cam().camera} 的 ${mode} 已保存`);
+}
+
+function setStatus(text) { document.getElementById("status").textContent = text; updateProgress(); }
+function updateProgress() {
+  const done = CAMS.filter((c) => records[c.camera] && records[c.camera].roi).length;
+  document.getElementById("progress").textContent = `已完成 ${done}/${CAMS.length}`;
+}
+
+function renderList() {
+  const q = document.getElementById("q").value.trim();
+  const box = document.getElementById("list");
+  box.innerHTML = "";
+  CAMS.forEach((c, i) => {
+    if (q && c.camera.indexOf(q) < 0) return;
+    const row = document.createElement("div");
+    const hasRoi = (records[c.camera] || {}).roi || c.roi;
+    row.className = "item" + (i === index ? " sel" : "") + (hasRoi ? " done" : "");
+    row.innerHTML = `<span>${c.camera}</span><span class="dot">${hasRoi ? "已有ROI" : ""}</span>`;
+    row.onclick = () => { index = i; ensureLoaded(); renderList(); syncBothWay(); setStatus(c.camera); };
+    box.appendChild(row);
+  });
+}
+
+function go(delta) {
+  if (!CAMS.length) return;
+  finishIfDraft();
+  index = Math.max(0, Math.min(CAMS.length - 1, index + delta));
+  ensureLoaded(); renderList(); syncBothWay(); setStatus(cam().camera);
+}
+function finishIfDraft() {
+  if (draft.length >= (mode === "roi" ? 3 : 2)) finish(); else draft = [];
+}
+
+document.getElementById("mRoi").onclick = () => setMode("roi");
+document.getElementById("mEntry").onclick = () => setMode("entry_line");
+document.getElementById("mExit").onclick = () => setMode("exit_line");
+function setMode(m) {
+  mode = m; draft = [];
+  for (const [id, key] of [["mRoi","roi"],["mEntry","entry_line"],["mExit","exit_line"]]) {
+    document.getElementById(id).classList.toggle("active", key === m);
+  }
+  setStatus(`模式：${m}`);
+}
+document.getElementById("finish").onclick = finish;
+document.getElementById("undo").onclick = () => { draft.pop(); draw(); };
+document.getElementById("clear").onclick = () => {
+  const r = rec();
+  if (mode === "roi") delete r.roi; else delete r[mode];
+  draft = []; save(); draw(); renderList();
+};
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+document.getElementById("q").addEventListener("input", renderList);
+document.getElementById("bothWay").addEventListener("change", (e) => {
+  const r = rec(); r.bidirectional = e.target.checked; save();
+  setStatus(e.target.checked ? "已标记为双向车道" : "单向车道");
+});
+document.getElementById("export").onclick = () => {
+  const payload = { version: 1, cameras: [] };
+  for (const c of CAMS) {
+    const r = records[c.camera];
+    if (!r) continue;
+    const item = { camera: c.camera, width: c.width, height: c.height };
+    if (r.roi) item.roi = r.roi;
+    if (r.entry_line) item.entry_line = r.entry_line;
+    if (r.exit_line) item.exit_line = r.exit_line;
+    if (r.bidirectional) item.bidirectional = true;
+    payload.cameras.push(item);
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "roi_marks.json";
+  a.click();
+};
+window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); finish(); }
+  else if (ev.key === "Backspace") { ev.preventDefault(); draft.pop(); draw(); }
+  else if (ev.key === "n" || ev.key === "N") { ev.preventDefault(); go(1); }
+  else if (ev.key === "p" || ev.key === "P") { ev.preventDefault(); go(-1); }
+  else if (ev.key === "1") { setMode("roi"); }
+  else if (ev.key === "2") { setMode("entry_line"); }
+  else if (ev.key === "3") { setMode("exit_line"); }
+});
+
+renderList();
+updateProgress();
+if (CAMS.length) { index = 0; ensureLoaded(); syncBothWay(); setStatus(CAMS[0].camera); }
+</script>
+</body>
+</html>

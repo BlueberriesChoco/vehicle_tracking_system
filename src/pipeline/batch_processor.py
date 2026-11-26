@@ -157,6 +157,7 @@ class BatchProcessor:
             geometry_level=geometry_level,
             has_roi=has_configured_roi,
             homography=homography,
+            bidirectional=bool(cam_cfg.get("bidirectional", False)),
         )
 
         # 轨迹平滑器

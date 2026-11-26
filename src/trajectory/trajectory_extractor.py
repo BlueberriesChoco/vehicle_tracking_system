@@ -54,8 +54,16 @@ class TrajectoryExtractor:
                 if entry_configured and tracklet.trajectory_length >= 2:
                     p_prev = tracklet.centers[-2]
                     p_curr = tracklet.centers[-1]
-                    if self.scene.check_line_crossing(p_prev, p_curr, "entry"):
+                    crossed_entry = self.scene.check_line_crossing(p_prev, p_curr, "entry")
+                    # 双向车道：先跨哪条线都算进入，记录先跨的是哪一条
+                    if self.scene.bidirectional and exit_configured:
+                        crossed_exit = self.scene.check_line_crossing(p_prev, p_curr, "exit")
+                        if crossed_entry or crossed_exit:
+                            entered = True
+                            tracklet.entry_side = "entry" if crossed_entry else "exit"
+                    elif crossed_entry:
                         entered = True
+                        tracklet.entry_side = "entry"
                 elif tracklet.trajectory_length >= self.enter_min_frames:
                     entered = True
 
@@ -69,7 +77,13 @@ class TrajectoryExtractor:
                 if exit_configured and tracklet.trajectory_length >= 2:
                     p_prev = tracklet.centers[-2]
                     p_curr = tracklet.centers[-1]
-                    if self.scene.check_line_crossing(p_prev, p_curr, "exit"):
+                    if self.scene.bidirectional and entry_configured:
+                        # 双向：跨过另一条线才算离开，避免同一条线重复计数
+                        if tracklet.entry_side == "entry":
+                            exited = self.scene.check_line_crossing(p_prev, p_curr, "exit")
+                        else:
+                            exited = self.scene.check_line_crossing(p_prev, p_curr, "entry")
+                    elif self.scene.check_line_crossing(p_prev, p_curr, "exit"):
                         exited = True
                 elif tracklet.state == "finished":
                     exited = True

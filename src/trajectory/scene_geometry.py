@@ -18,6 +18,7 @@ class SceneGeometry:
         geometry_level: str = "none",
         has_roi: bool = False,
         homography=None,
+        bidirectional: bool = False,
     ):
         """
         Args:
@@ -25,6 +26,8 @@ class SceneGeometry:
             exit_line: 出口线段 ((x1,y1), (x2,y2))
             px_per_meter: 像素/米换算比例（无单应矩阵时的近似）
             homography: 可选 3x3 单应矩阵，把像素坐标映射到地面米制坐标
+            bidirectional: 双向车道。True 时「先跨任一条线记为进入、再跨另一条记为离开」，
+                这样两个方向的车都能形成通行记录；False 时要求先入口后出口（单向）
         """
         self.entry_p1 = np.array(entry_line[0], dtype=np.float64)
         self.entry_p2 = np.array(entry_line[1], dtype=np.float64)
@@ -33,6 +36,7 @@ class SceneGeometry:
         self.px_per_meter = px_per_meter
         self.geometry_level = geometry_level
         self.has_roi = has_roi
+        self.bidirectional = bool(bidirectional)
 
         self.homography = None
         if homography is not None:

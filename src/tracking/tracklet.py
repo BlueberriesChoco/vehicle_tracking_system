@@ -32,7 +32,8 @@ class Tracklet:
     confidences: List[float] = field(default_factory=list)
 
     # 通道事件
-    has_entered: bool = False       # 是否已穿越入口线
+    has_entered: bool = False       # 是否已穿越入口线（双向模式下可能是任意一条线）
+    entry_side: Optional[str] = None  # 双向模式：先跨的是 entry 还是 exit
     has_exited: bool = False        # 是否已穿越出口线
     enter_frame: Optional[int] = None
     exit_frame: Optional[int] = None
