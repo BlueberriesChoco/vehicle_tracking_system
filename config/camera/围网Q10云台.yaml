@@ -1,0 +1,16 @@
+camera_id: 围网Q10云台
+camera_name: 围网Q10云台
+# 由 .runtime/derive_motion.py 推导（仅用运动目标），只写 ROI，不写进出线：
+# 自动推导的进出线是硬门控，误差会让大量车辆不产生向量；
+# 需要在有把握时用 scripts/calibrate_camera.py 手工补 entry_line / exit_line。
+roi:
+  polygon:
+  - [1799, 391]
+  - [1800, 386]
+  - [1816, 390]
+  - [1806, 392]
+calibration:
+  # 未标定：速度/路径/聚集特征会被门控。现场量到 >=4 组控制点后填 homography。
+  px_per_meter: 0.0
+anomaly:
+  contamination: 0.05

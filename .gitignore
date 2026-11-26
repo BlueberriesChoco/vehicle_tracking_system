@@ -14,10 +14,21 @@ __pycache__/
 data/validation/
 data/outputs/
 data/references/
+data/logs/
+data/work/
 tmp/
 
 # Agent workspace data
 .workbuddy/
+
+# Local toolchain (portable Python / uv / download caches)
+.python312/
+.tools/
+.downloads/
+.uvcache/
+.pipcache/
+.tmp/
+.runtime/
 
 # Model build artifacts
 *.onnx

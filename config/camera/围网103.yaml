@@ -1,0 +1,11 @@
+camera_id: 围网103
+camera_name: 围网103
+# 动点推导失败，退化为全画幅 ROI；无进出线，靠轨迹长度判进入
+roi:
+  polygon:
+  - [0, 0]
+  - [1920, 0]
+  - [1920, 1080]
+  - [0, 1080]
+anomaly:
+  contamination: 0.05
