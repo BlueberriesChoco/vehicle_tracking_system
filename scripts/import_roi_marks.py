@@ -67,9 +67,9 @@ def apply_marks(marks: dict, config_dir: str, sizes: Dict[str, dict] | None = No
         path = os.path.join(config_dir, f"{camera}.yaml")
         existed = os.path.isfile(path)
         config = {}
+        _clamp_counter = [0]
         if existed:
-            _clamp_counter = [0]
-        with open(path, encoding="utf-8") as handle:
+            with open(path, encoding="utf-8") as handle:
                 config = yaml.safe_load(handle) or {}
 
         config.setdefault("camera_id", camera)

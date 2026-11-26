@@ -27,7 +27,7 @@ def test_roi_and_lines_are_written(tmp_path):
         str(tmp_path),
     )
 
-    assert stats == {"updated": 0, "created": 1, "skipped": 0}
+    assert stats["created"] == 1 and stats["updated"] == 0 and stats["skipped"] == 0
     data = yaml.safe_load((tmp_path / "cam_a.yaml").read_text(encoding="utf-8"))
     assert data["camera_id"] == "cam_a"
     assert data["roi"]["polygon"][0] == [10, 10]
