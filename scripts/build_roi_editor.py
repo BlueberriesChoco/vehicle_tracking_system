@@ -103,12 +103,10 @@ function draw() {
   if ((r.roi && r.roi.length >= 3) || (c.roi && c.roi.length >= 3 && !r.roi)) {
     strokePoly((r.roi || c.roi), "#fbbf24", true);
   }
-  if ((r.entry_line && r.entry_line.length === 2) || (c.entry_line && !r.entry_line)) {
-    strokePoly((r.entry_line || c.entry_line), "#22c55e", false, "入口");
-  }
-  if ((r.exit_line && r.exit_line.length === 2) || (c.exit_line && !r.exit_line)) {
-    strokePoly((r.exit_line || c.exit_line), "#ef4444", false, "出口");
-  }
+  const entryLines = r.entry_lines || c.entry_lines || (c.entry_line ? [c.entry_line] : []);
+  const exitLines = r.exit_lines || c.exit_lines || (c.exit_line ? [c.exit_line] : []);
+  entryLines.forEach((line, i) => strokePoly(line, "#22c55e", false, "入口" + (entryLines.length > 1 ? (i + 1) : "")));
+  exitLines.forEach((line, i) => strokePoly(line, "#ef4444", false, "出口" + (exitLines.length > 1 ? (i + 1) : "")));
   // 正在画的
   if (draft.length) {
     ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 2;
@@ -149,8 +147,13 @@ function finish() {
   const need = mode === "roi" ? 3 : 2;
   if (draft.length < need) { setStatus(`${mode} 至少要 ${need} 个点`); return; }
   const r = rec();
-  if (mode === "roi") r.roi = draft.slice();
-  else r[mode] = [draft[0], draft[draft.length - 1]];
+  if (mode === "roi") {
+    r.roi = draft.slice();
+  } else {
+    const key = mode === "entry_line" ? "entry_lines" : "exit_lines";
+    r[key] = r[key] || [];
+    r[key].push([draft[0], draft[draft.length - 1]]);
+  }
   draft = [];
   save(); draw(); renderList();
   setStatus(`${cam().camera} 的 ${mode} 已保存`);
@@ -201,7 +204,9 @@ document.getElementById("finish").onclick = finish;
 document.getElementById("undo").onclick = () => { draft.pop(); draw(); };
 document.getElementById("clear").onclick = () => {
   const r = rec();
-  if (mode === "roi") delete r.roi; else delete r[mode];
+  if (mode === "roi") delete r.roi;
+  else if (mode === "entry_line") delete r.entry_lines;
+  else delete r.exit_lines;
   draft = []; save(); draw(); renderList();
 };
 document.getElementById("prev").onclick = () => go(-1);
@@ -218,8 +223,8 @@ document.getElementById("export").onclick = () => {
     if (!r) continue;
     const item = { camera: c.camera, width: c.width, height: c.height };
     if (r.roi) item.roi = r.roi;
-    if (r.entry_line) item.entry_line = r.entry_line;
-    if (r.exit_line) item.exit_line = r.exit_line;
+    if (r.entry_lines && r.entry_lines.length) item.entry_lines = r.entry_lines;
+    if (r.exit_lines && r.exit_lines.length) item.exit_lines = r.exit_lines;
     if (r.bidirectional) item.bidirectional = true;
     payload.cameras.push(item);
   }

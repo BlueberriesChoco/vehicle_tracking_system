@@ -53,6 +53,16 @@ def apply_marks(marks: dict, config_dir: str) -> Dict[str, int]:
                 "p1": [int(round(v)) for v in item["exit_line"][0]],
                 "p2": [int(round(v)) for v in item["exit_line"][1]],
             }
+        # 多条线：写 entry_lines / exit_lines，并移除单条键避免重复
+        for plural, single in (("entry_lines", "entry_line"), ("exit_lines", "exit_line")):
+            lines = [line for line in (item.get(plural) or []) if len(line) == 2]
+            if lines:
+                config[plural] = [
+                    {"p1": [int(round(v)) for v in line[0]],
+                     "p2": [int(round(v)) for v in line[1]]}
+                    for line in lines
+                ]
+                config.pop(single, None)
         config.setdefault("calibration", {"px_per_meter": 0.0})
         config.setdefault("anomaly", {"contamination": 0.05})
 

@@ -22,17 +22,15 @@ class SceneGeometry:
     ):
         """
         Args:
-            entry_line: 入口线段 ((x1,y1), (x2,y2))
-            exit_line: 出口线段 ((x1,y1), (x2,y2))
+            entry_line: 入口线段 ((x1,y1), (x2,y2))，也接受多条线的列表 [[p1,p2], [p1,p2], ...]
+            exit_line: 出口线段 ((x1,y1), (x2,y2))，同上；跨任意一条即算通过
             px_per_meter: 像素/米换算比例（无单应矩阵时的近似）
             homography: 可选 3x3 单应矩阵，把像素坐标映射到地面米制坐标
             bidirectional: 双向车道。True 时「先跨任一条线记为进入、再跨另一条记为离开」，
                 这样两个方向的车都能形成通行记录；False 时要求先入口后出口（单向）
         """
-        self.entry_p1 = np.array(entry_line[0], dtype=np.float64)
-        self.entry_p2 = np.array(entry_line[1], dtype=np.float64)
-        self.exit_p1 = np.array(exit_line[0], dtype=np.float64)
-        self.exit_p2 = np.array(exit_line[1], dtype=np.float64)
+        self.entry_lines = self._normalize_lines(entry_line)
+        self.exit_lines = self._normalize_lines(exit_line)
         self.px_per_meter = px_per_meter
         self.geometry_level = geometry_level
         self.has_roi = has_roi
@@ -44,6 +42,38 @@ class SceneGeometry:
             if matrix.shape != (3, 3):
                 raise ValueError("homography 必须是 3x3 矩阵")
             self.homography = matrix
+
+    @staticmethod
+    def _normalize_lines(raw) -> list:
+        """把「单条线」或「多条线的列表」统一成 [((x1,y1),(x2,y2)), ...]。"""
+        if not raw:
+            return []
+        # 单条线：((x1,y1), (x2,y2))
+        if isinstance(raw, (list, tuple)) and len(raw) == 2 and not isinstance(raw[0][0], (list, tuple)):
+            return [(tuple(raw[0]), tuple(raw[1]))]
+        lines = []
+        for item in raw:
+            if not item or len(item) != 2:
+                continue
+            lines.append((tuple(item[0]), tuple(item[1])))
+        return lines
+
+    # 兼容旧代码：取第一条线
+    @property
+    def entry_p1(self):
+        return np.array(self.entry_lines[0][0], dtype=np.float64) if self.entry_lines else np.zeros(2)
+
+    @property
+    def entry_p2(self):
+        return np.array(self.entry_lines[0][1], dtype=np.float64) if self.entry_lines else np.zeros(2)
+
+    @property
+    def exit_p1(self):
+        return np.array(self.exit_lines[0][0], dtype=np.float64) if self.exit_lines else np.zeros(2)
+
+    @property
+    def exit_p2(self):
+        return np.array(self.exit_lines[0][1], dtype=np.float64) if self.exit_lines else np.zeros(2)
 
     @property
     def has_homography(self) -> bool:
@@ -77,33 +107,35 @@ class SceneGeometry:
         p_curr: Tuple[float, float],
         line: str = "entry",
     ) -> bool:
-        """判断从 p_prev 到 p_curr 是否跨越了指定线段（entry/exit）。
+        """判断从 p_prev 到 p_curr 是否跨越了入口/出口线（跨任意一条即算）。
 
         使用跨立实验（叉积符号判断）。
         """
-        a, b = (self.entry_p1, self.entry_p2) if line == "entry" else (self.exit_p1, self.exit_p2)
+        lines = self.entry_lines if line == "entry" else self.exit_lines
         c = np.array(p_prev, dtype=np.float64)
         d = np.array(p_curr, dtype=np.float64)
 
         def cross(o, a, b):
             return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
-        d1 = cross(c, a, b)
-        d2 = cross(d, a, b)
-        d3 = cross(a, c, d)
-        d4 = cross(b, c, d)
-
-        if ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)):
-            return True
+        for p1, p2 in lines:
+            a = np.array(p1, dtype=np.float64)
+            b = np.array(p2, dtype=np.float64)
+            d1 = cross(c, a, b)
+            d2 = cross(d, a, b)
+            d3 = cross(a, c, d)
+            d4 = cross(b, c, d)
+            if ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)):
+                return True
         return False
 
     def has_valid_entry_line(self) -> bool:
-        """入口线是否有效（两端点不同）。"""
-        return not np.array_equal(self.entry_p1, self.entry_p2)
+        """入口线是否有效（至少一条线两端点不同）。"""
+        return any(not np.array_equal(np.array(p1), np.array(p2)) for p1, p2 in self.entry_lines)
 
     def has_valid_exit_line(self) -> bool:
-        """出口线是否有效（两端点不同）。"""
-        return not np.array_equal(self.exit_p1, self.exit_p2)
+        """出口线是否有效（至少一条线两端点不同）。"""
+        return any(not np.array_equal(np.array(p1), np.array(p2)) for p1, p2 in self.exit_lines)
 
     @property
     def speed_reliable(self) -> int:

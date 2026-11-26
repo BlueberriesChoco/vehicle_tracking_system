@@ -125,8 +125,11 @@ class BatchProcessor:
         )
 
         # 场景几何：决定速度、路径偏离、聚集距离等字段是否可靠
-        entry_line = cam_cfg.get("entry_line", {})
-        exit_line = cam_cfg.get("exit_line", {})
+        # 支持单条线（entry_line）与多条线（entry_lines: [{p1,p2}, ...]），跨任意一条即算通过
+        entry_lines = self._parse_gate_lines(cam_cfg, "entry_line", "entry_lines")
+        exit_lines = self._parse_gate_lines(cam_cfg, "exit_line", "exit_lines")
+        entry_line = entry_lines[0] if entry_lines else {}
+        exit_line = exit_lines[0] if exit_lines else {}
         calib = cam_cfg.get("calibration", {})
         px_per_meter = calib.get("px_per_meter", 20.0)
         if px_per_meter <= 0 and calib.get("ref_length_m", 0) > 0:
@@ -145,14 +148,8 @@ class BatchProcessor:
         )
 
         self.scene_geometry = SceneGeometry(
-            entry_line=(
-                tuple(entry_line.get("p1", [0, 0])),
-                tuple(entry_line.get("p2", [0, 0])),
-            ),
-            exit_line=(
-                tuple(exit_line.get("p1", [0, 0])),
-                tuple(exit_line.get("p2", [0, 0])),
-            ),
+            entry_line=entry_lines or [{"p1": [0, 0], "p2": [0, 0]}],
+            exit_line=exit_lines or [{"p1": [0, 0], "p2": [0, 0]}],
             px_per_meter=px_per_meter,
             geometry_level=geometry_level,
             has_roi=has_configured_roi,
@@ -535,6 +532,20 @@ class BatchProcessor:
         if has_configured_roi:
             return "roi"
         return "none"
+
+    @staticmethod
+    def _parse_gate_lines(config: dict, single_key: str, plural_key: str):
+        """把单条线 / 多条线统一成 [{"p1": [...], "p2": [...]}, ...]。"""
+        lines = []
+        for item in config.get(plural_key) or []:
+            if isinstance(item, dict) and item.get("p1") and item.get("p2"):
+                lines.append({"p1": list(item["p1"]), "p2": list(item["p2"])})
+        single = config.get(single_key) or {}
+        if isinstance(single, dict) and single.get("p1") and single.get("p2"):
+            candidate = {"p1": list(single["p1"]), "p2": list(single["p2"])}
+            if candidate not in lines:
+                lines.append(candidate)
+        return lines
 
     @staticmethod
     def _parse_homography(calibration: dict):
