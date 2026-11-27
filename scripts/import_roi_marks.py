@@ -34,6 +34,27 @@ _ConfigDumper.add_representer(list, _represent_list)
 
 
 EDGE_MARGIN_RATIO = 0.04
+CLOSE_DUP_PX = 10.0
+
+
+def _clean_polygon(points):
+    """去掉末尾与起点重合的闭合点、以及相邻重复点。
+
+    标定时习惯点回起点表示闭合，若原样保留会多出一条横穿内部的边，
+    在多边形判定和自相交检测里都会造成问题。
+    """
+    cleaned = []
+    for point in points or []:
+        candidate = [int(round(float(point[0]))), int(round(float(point[1])))]
+        if cleaned and abs(candidate[0] - cleaned[-1][0]) < 3 and abs(candidate[1] - cleaned[-1][1]) < 3:
+            continue
+        cleaned.append(candidate)
+    if len(cleaned) >= 3:
+        first, last = cleaned[0], cleaned[-1]
+        if ((first[0] - last[0]) ** 2 + (first[1] - last[1]) ** 2) ** 0.5 <= CLOSE_DUP_PX:
+            cleaned.pop()
+    return cleaned
+
 
 
 def _clamp_point(point, width, height):
@@ -75,9 +96,9 @@ def apply_marks(marks: dict, config_dir: str, sizes: Dict[str, dict] | None = No
         config.setdefault("camera_id", camera)
         config.setdefault("camera_name", camera)
 
-        roi: List = item.get("roi") or []
+        roi = _clean_polygon(item.get("roi") or [])
         if len(roi) >= 3:
-            config["roi"] = {"polygon": [[int(round(x)), int(round(y))] for x, y in roi]}
+            config["roi"] = {"polygon": roi}
         size = (sizes or {}).get(camera, {})
         width, height = size.get("width"), size.get("height")
         if len(item.get("entry_line") or []) == 2:

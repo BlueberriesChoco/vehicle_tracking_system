@@ -37,6 +37,7 @@ class Tracklet:
     has_exited: bool = False        # 是否已穿越出口线
     enter_frame: Optional[int] = None
     exit_frame: Optional[int] = None
+    exit_by_track_end: bool = False   # 双向模式兜底：轨迹结束时补记离开
 
     # 特征（Phase 2 填充）
     best_confidence: float = 0.0

@@ -7,14 +7,13 @@ roi:
   - [1892, 1076]
   - [1903, 261]
   - [1461, 253]
-  - [839, 272]
 bidirectional: true
 entry_lines:
 - p1: [1528, 248]
-  p2: [1843, 538]
+  p2: [1910, 538]
 exit_lines:
-- p1: [1843, 556]
-  p2: [1843, 1037]
+- p1: [1911, 556]
+  p2: [1905, 1068]
 calibration:
   px_per_meter: 0.0
 anomaly:

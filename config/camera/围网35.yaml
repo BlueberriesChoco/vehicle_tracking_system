@@ -20,7 +20,7 @@ roi:
   - [674, 401]
 bidirectional: true
 entry_lines:
-- p1: [1843, 504]
+- p1: [1911, 504]
   p2: [1738, 807]
 exit_lines:
 - p1: [916, 365]

@@ -148,7 +148,13 @@ function finish() {
   if (draft.length < need) { setStatus(`${mode} 至少要 ${need} 个点`); return; }
   const r = rec();
   if (mode === "roi") {
-    r.roi = draft.slice();
+    const points = draft.slice();
+    // 点回起点表示闭合：去掉重复的末点，避免多边形多出一条横穿内部的边
+    if (points.length >= 4) {
+      const first = points[0], last = points[points.length - 1];
+      if (Math.hypot(first[0] - last[0], first[1] - last[1]) < 10) points.pop();
+    }
+    r.roi = points;
   } else {
     const key = mode === "entry_line" ? "entry_lines" : "exit_lines";
     r[key] = r[key] || [];

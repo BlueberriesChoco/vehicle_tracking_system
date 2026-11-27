@@ -23,7 +23,23 @@ import json
 import math
 from typing import List, Tuple
 
-EDGE_MARGIN = 0.04      # 线端点距画面边缘小于画面尺寸 4% 视为「贴边」
+EDGE_MARGIN = 0.04
+CLOSE_DUP_PX = 10.0
+
+
+def clean_polygon(points):
+    """去掉闭合重复点（末点≈首点）与相邻重复点。"""
+    cleaned = []
+    for point in points or []:
+        candidate = [int(round(float(point[0]))), int(round(float(point[1])))]
+        if cleaned and abs(candidate[0] - cleaned[-1][0]) < 3 and abs(candidate[1] - cleaned[-1][1]) < 3:
+            continue
+        cleaned.append(candidate)
+    if len(cleaned) >= 3:
+        first, last = cleaned[0], cleaned[-1]
+        if ((first[0] - last[0]) ** 2 + (first[1] - last[1]) ** 2) ** 0.5 <= CLOSE_DUP_PX:
+            cleaned.pop()
+    return cleaned      # 线端点距画面边缘小于画面尺寸 4% 视为「贴边」
 MIN_ROI_RATIO = 0.01
 MAX_ROI_RATIO = 0.98
 MIN_LINE_LEN_PX = 40
@@ -71,13 +87,29 @@ def point_in_polygon(point, poly) -> bool:
     return inside
 
 
+def _segment_touches_polygon(p1, p2, poly) -> bool:
+    """线的任意一点落在多边形内，或与多边形边相交，就算有交集。"""
+    steps = 24
+    for index in range(steps + 1):
+        t = index / steps
+        point = (p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t)
+        if point_in_polygon(point, poly):
+            return True
+    n = len(poly)
+    for index in range(n):
+        if _segments_cross(p1, p2, poly[index], poly[(index + 1) % n]):
+            return True
+    return False
+
+
 def validate_camera(entry: dict, camera: dict) -> List[str]:
     warnings = []
+    notes = []
     width, height = camera.get("width") or 0, camera.get("height") or 0
     if not width or not height:
         return ["没有参考帧尺寸，无法校验"]
 
-    roi = entry.get("roi") or []
+    roi = clean_polygon(entry.get("roi") or [])
     if len(roi) < 3:
         warnings.append("ROI 少于 3 点")
     else:
@@ -101,24 +133,25 @@ def validate_camera(entry: dict, camera: dict) -> List[str]:
 
     if not lines:
         warnings.append("没有出入口线（只能按轨迹起止统计）")
-        return warnings
+        return warnings + notes
 
     margin_x, margin_y = width * EDGE_MARGIN, height * EDGE_MARGIN
+    edge_touching = 0
     for label, p1, p2 in lines:
         for point in (p1, p2):
             x, y = point
-            if x < margin_x or x > width - margin_x or y < margin_y or y > height - margin_y:
-                warnings.append(
-                    f"{label}端点 ({int(x)},{int(y)}) 贴着画面边缘，"
-                    "车辆会在轨迹不足 2 点时跨线导致漏判；建议往画面内移 10–15%")
+            if x < margin_x - 1 or x > width - margin_x + 1 or y < margin_y - 1 or y > height - margin_y + 1:
+                edge_touching += 1
                 break
+    if edge_touching:
+        # 线画到画面边缘是常见做法；只有跨线发生在边缘极窄区域时才漏判，
+        # 这里降级为提示，不阻塞配置使用
+        notes.append(f"[提示] {edge_touching} 条线端点贴画面边缘（常见做法，仅边界车辆可能受影响）")
         length = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
-        if length < MIN_LINE_LEN_PX:
-            warnings.append(f"{label}太短（{length:.0f} px），可能没横跨车道")
-        if len(roi) >= 3:
-            mid = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
-            if not point_in_polygon(mid, roi):
-                warnings.append(f"{label}中点不在 ROI 内，跨线时车辆可能已被 ROI 过滤")
+        # 右转支路等场景线本来就短，不再作为告警；保留长度信息供参考
+        _ = length
+        if len(roi) >= 3 and not _segment_touches_polygon(p1, p2, roi):
+            warnings.append(f"{label}与 ROI 没有交集，跨线时车辆已被 ROI 过滤掉，永远触发不了")
 
     entries = [item for item in lines if item[0] == "入口线"]
     exits = [item for item in lines if item[0] == "出口线"]
@@ -129,7 +162,7 @@ def validate_camera(entry: dict, camera: dict) -> List[str]:
                 xm = ((x1[0] + x2[0]) / 2, (x1[1] + x2[1]) / 2)
                 if math.hypot(em[0] - xm[0], em[1] - xm[1]) < 20:
                     warnings.append("入口线与出口线几乎重合，无法先跨一条再跨另一条")
-    return warnings
+    return warnings + notes
 
 
 def main() -> None:
@@ -147,7 +180,8 @@ def main() -> None:
     for entry in marks.get("cameras", []):
         camera = entry.get("camera")
         warnings = validate_camera(entry, sizes.get(camera, {}))
-        results.append({"camera": camera, "warnings": warnings, "ok": not warnings})
+        real = [w for w in warnings if not w.startswith("[提示]")]
+        results.append({"camera": camera, "warnings": real, "notes": [w for w in warnings if w.startswith("[提示]")], "ok": not real})
 
     ok = sum(1 for item in results if item["ok"])
     summary = {

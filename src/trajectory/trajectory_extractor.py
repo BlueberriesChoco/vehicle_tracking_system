@@ -85,6 +85,14 @@ class TrajectoryExtractor:
                             exited = self.scene.check_line_crossing(p_prev, p_curr, "entry")
                     elif self.scene.check_line_crossing(p_prev, p_curr, "exit"):
                         exited = True
+                    # 双向车道兜底：朝镜头方向驶来的车，可能在画面边缘跨出口线时
+                    # 轨迹还不足 2 点（跨线事件漏检），于是只记到一次跨线。
+                    # 轨迹结束时补记离开，避免整条被丢弃。
+                    if (not exited and self.scene.bidirectional
+                            and tracklet.state == "finished"
+                            and tracklet.trajectory_length >= self.min_trajectory_length):
+                        exited = True
+                        tracklet.exit_by_track_end = True
                 elif tracklet.state == "finished":
                     exited = True
 
